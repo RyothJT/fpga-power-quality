@@ -1,0 +1,56 @@
+# ==========================================
+# Vivado Build Artifacts & Project Directories
+# ==========================================
+build/
+*.runs/
+*.sim/
+*.srcs/
+*.hw/
+*.ip_user_files/
+*.cache/
+*.gen/
+
+# Vivado Log, Journal, & Dump Files
+*.log
+*.jou
+*.str
+*.pb
+*.mif
+*.dir/
+vivado*.str
+vivado*.log
+
+# Xilinx IP & Simulator Outputs
+xsim.dir/
+.Xil/
+*_sim.wdb
+xvlog.pb
+xelab.pb
+xsim.pb
+
+# ==========================================
+# Simulation Tool Artifacts (Icarus / Surfer / Script Outputs)
+# ==========================================
+sim/gen/
+*.vvp
+*.vcd
+*.fst
+*.wdb
+
+# Python & Environment Artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+
+# ==========================================
+# OS & Editor Specific Files
+# ==========================================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*~
