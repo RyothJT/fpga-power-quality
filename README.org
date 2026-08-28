@@ -1,19 +1,31 @@
-#+TITLE: FPGA Grid Simulator & SOGI-PLL
+#+TITLE: FPGA Grid Simulator & SOGI-PLL (Phase 1: Pure Digital & HIL Simulation)
 #+AUTHOR: Justin Troth
 #+OPTIONS: toc:2 num:nil
 
-A high-performance Verilog implementation of a Hardware-in-the-Loop (HIL) AC power grid signal generator and synchronization engine. Built for Xilinx/AMD FPGAs (target: Basys 3), this project features a Direct Digital Synthesis (DDS) waveform generator with dynamic harmonic injection, voltage sag simulation, phase jitter modeling, and a Second-Order Generalized Integrator (SOGI-PLL) for grid frequency and phase tracking.
+A high-performance Verilog implementation of a Hardware-in-the-Loop (HIL) AC power grid signal generator, measurement engine, and synchronization system. Built for Xilinx/AMD Artix-7 FPGAs (target: Digilent Basys 3) using Vivado and open-source simulation tools, this project models real-world grid dynamics including voltage sags, phase jitter, dynamic phase offsets, and independent odd harmonic distortion (3^{rd}, 5^{th}, 7^{th}) on both voltage (V) and current (I) channels.
 
-* Features
-** DDS Signal Generator (~dds_top.v~)
-- Synthesizes 60 Hz fundamental grid voltage ($V$) and current ($I$) waveforms at 100 MHz clock frequency.
-- Independent, fixed-point Q0.8 scaling for 3^{rd}, 5^{th}, and 7^{th} odd harmonics on both $V$ and $I$ channels.
-- Phase-aligned current harmonics representing non-linear load behaviors.
-- Real-time Q1.8 voltage sag and amplitude scaling logic.
-- LFSR-based pseudo-random phase jitter injection.
+* Architecture & Features
+
+** Digital Signal Generation (~dds_top.v~)
+- *Fundamental Synthesis:* Synthesizes 60 Hz fundamental grid voltage (V) and current (I) waveforms driven by a 100 MHz clock using a 32-bit Direct Digital Synthesizer (DDS) phase accumulator.
+- *Dual-Channel Harmonic Engine:* Independent Q0.8 fixed-point scaling for 3^{rd} (180 Hz), 5^{th} (300 Hz), and 7^{th} (420 Hz) odd harmonics across both V and I paths. Current harmonics are phase-aligned with fundamental current to model non-linear load behaviors.
+- *Anomaly Modeling:*
+  - Real-time Q1.8 voltage sag and amplitude scaling logic (0% to 100% nominal grid voltage).
+  - LFSR-based pseudo-random phase jitter injection for micro-flicker simulation.
+  - Dynamic fundamental phase offset control between V and I for power factor modeling.
+
+** Signal Conditioning & Sampling
+- *XADC Interface:* Integration hook for the Xilinx XADC IP block (~xadc_interface.v~) to map external analog inputs or internal digital streams into signed 16-bit Q1.15 fixed-point vectors.
+
+** Core Algorithmic Modules
+- *SOGI-PLL Engine:* Second-Order Generalized Integrator (~sogi_core.v~) creating orthogonal \alpha/\beta signals, coupled with Park Transformation (~park_transform.v~) and a PI controller (~pi_controller.v~) to track fundamental phase angle (\theta) and frequency.
+- *Real-Time Power Calculation Engine:* Computes Instantaneous Active Power (P = V \cdot I), Reactive Power (Q), and real-time RMS metrics using fixed-point arithmetic.
+- *Harmonic Analysis Engine:* Evaluates Total Harmonic Distortion (THD) across sampled waveforms via Goertzel or FFT filtering (~thd_analyzer.v~).
+
 ** Verification & Tooling Workflow
-- Automated simulation runner via ~run_sim.py~ (Icarus Verilog + Surfer / GTKWave).
-- Modular testbench structure supporting multi-phase dynamic injection.
+- Automated simulation runner via ~run_sim.py~ using Icarus Verilog (~iverilog~) and Surfer / GTKWave waveform visualization.
+- Multi-phase testbenches with sat-checked math and fixed-point execution.
+- Live hardware telemetry using Xilinx Integrated Logic Analyzer (ILA) IP for real-time tracking of internal signals over USB.
 
 * Repository Structure
 
@@ -36,55 +48,56 @@ A high-performance Verilog implementation of a Hardware-in-the-Loop (HIL) AC pow
 #+END_EXAMPLE
 
 * Getting Started
+
 ** Prerequisites
 - *Simulator:* [[http://iverilog.icarus.com/][Icarus Verilog]] (~iverilog~)
 - *Waveform Viewer:* [[https://gitlab.com/surfer-project/surfer][Surfer]] or [[http://gtkwave.sourceforge.net/][GTKWave]]
 - *Python:* Python 3.8+
-- *FPGA Synthesis (Optional):* AMD Vivado 2020.2+
+- *FPGA Toolchain:* AMD Vivado 2020.2+ (for Synthesis, Implementation, and ILA debugging)
+
 ** Running Simulations
 
-To run the DDS generator simulation and launch the waveform viewer:
+To run the DDS waveform generator simulation and launch the waveform viewer:
 
 #+BEGIN_SRC bash
 python3 run_sim.py tb_dds_top
 #+END_SRC
 
-* Project Tasks & Roadmap
-** DDS Generator & Waveform Engine
-*** DONE Implement fundamental 60 Hz DDS sine wave lookup table (ROM).
-CLOSED: [2026-08-28 Fri 15:45]
-- State "DONE"       from "TODO"       [2026-08-28 Fri 15:45]
-*** DONE Add dynamic Q1.8 voltage sag scaling logic.
-CLOSED: [2026-08-28 Fri 15:45]
-- State "DONE"       from "TODO"       [2026-08-28 Fri 15:45]
-*** DONE Integrate LFSR pseudo-random phase jitter injection.
-CLOSED: [2026-08-28 Fri 15:45]
-- State "DONE"       from "TODO"       [2026-08-28 Fri 15:45]
-*** DONE Add independent 3^{rd}, 5^{th}, and 7^{th} odd harmonic generation for Voltage ($V$).
-CLOSED: [2026-08-28 Fri 15:45]
-- State "DONE"       from "TODO"       [2026-08-28 Fri 15:45]
-*** DONE Add phase-aligned odd harmonic scaling for Current ($I$).
-CLOSED: [2026-08-28 Fri 15:45]
-- State "DONE"       from "TODO"       [2026-08-28 Fri 15:45]
-*** TODO Add configurable phase offset control between $V$ and $I$ for power factor adjustment ($0 \le \phi \le 360^\circ$).
-*** TODO Implement saturation and clipping flag outputs (~v_clip~, ~i_clip~) for hardware monitoring.
+* Phase 1 Execution Roadmap & TODOs
 
-** SOGI-PLL & Grid Synchronization Engine
-*** TODO Implement ~sogi_core.v~ (Second-Order Generalized Integrator producing in-phase $\alpha$ and quadrature $\beta$ signals).
-*** TODO Implement Park Transformation ($\alpha\beta \to dq$) module (~park_transform.v~).
-*** TODO Implement PI Loop Filter (~pi_controller.v~) for continuous phase/frequency error tracking.
-*** TODO Integrate top-level SOGI-PLL module (~sogi_pll_top.v~) and verify grid lock against 50 Hz / 60 Hz frequency drifts.
+** Digital Signal Generation (Internal Grid Model)
+*** DONE Implement fundamental 60 Hz DDS sine wave lookup table (~dds_sine_rom.v~).
+CLOSED: [2026-08-28 Fri 15:45]
+- State "DONE"       from "TODO"       [2026-08-28 Fri 15:45]
+*** DONE Add dynamic Q1.8 voltage sag scaling logic into ~dds_top.v~.
+CLOSED: [2026-08-28 Fri 15:45]
+- State "DONE"       from "TODO"       [2026-08-28 Fri 15:45]
+*** DONE Integrate LFSR pseudo-random phase jitter injection (~lfsr_random.v~).
+CLOSED: [2026-08-28 Fri 15:45]
+- State "DONE"       from "TODO"       [2026-08-28 Fri 15:45]
+*** DONE Add independent Q0.8 scaling for 3^{rd}, 5^{th}, and 7^{th} odd harmonics on Voltage (V).
+CLOSED: [2026-08-28 Fri 15:45]
+- State "DONE"       from "TODO"       [2026-08-28 Fri 15:45]
+*** DONE Add phase-aligned odd harmonic scaling for Current (I).
+CLOSED: [2026-08-28 Fri 15:45]
+- State "DONE"       from "TODO"       [2026-08-28 Fri 15:45]
+*** TODO Verify full range fundamental phase offset control (\phi) between V and I for power factor sweep (0 \le \phi \le 360^\circ).
+*** TODO Implement overflow saturation flags (~v_clip~, ~i_clip~) for hardware monitoring.
 
-** Power & Distortion Computation Engine
-*** TODO Implement fixed-point multiplier block (~power_engine.v~) for instantaneous Active Power ($P$) and Reactive Power ($Q$).
-*** TODO Implement moving average / IIR filter for real-time RMS voltage V_{RMS} and RMS current I_{RMS} calculation.
-*** TODO Implement Total Harmonic Distortion (THD) estimator block.
+** Signal Conditioning & Sampling Interface
+*** TODO Instantiate and configure Xilinx XADC IP block for sampling dual analog inputs or streaming internal digital vectors.
+*** TODO Write XADC interface module (~xadc_interface.v~) to convert raw XADC samples into 16-bit Q1.15 fixed-point V and I data buses.
 
-** Hardware-in-the-Loop (HIL) & Basys 3 Integration
-*** TODO Map DDS outputs to PMOD connectors via 12-bit R-2R ladder DAC or SPI DAC.
-*** TODO Assign physical Basys 3 switches to toggle sag factors and harmonic injection modes.
-*** TODO Connect internal status flags to onboard LEDs (e.g., PLL Lock indicator).
+** Core Algorithmic Modules (HDL)
+*** TODO Implement ~sogi_core.v~ (Second-Order Generalized Integrator producing in-phase \alpha and quadrature \beta signals).
+*** TODO Implement Park Transformation (\alpha\beta \to dq) module (~park_transform.v~).
+*** TODO Implement PI Loop Filter (~pi_controller.v~) for continuous phase/frequency error tracking (57 Hz \le f \le 63 Hz).
+*** TODO Implement ~power_engine.v~ using fixed-point multipliers to compute Instantaneous Active Power (P = V \cdot I) and Reactive Power (Q).
+*** TODO Implement moving average / IIR filter for real-time V_{RMS} and I_{RMS} calculation.
+*** TODO Implement Total Harmonic Distortion (THD) estimator block (~thd_analyzer.v~).
 
-# Local Variables:
-# eval: (add-hook 'after-save-hook #'org-gfm-export-to-markdown nil t)
+** Verification & Hardware Testing
+*** TODO Write Vivado testbenches validating PLL lock speed during transient sags and phase jumps.
+*** TODO Configure Xilinx Integrated Logic Analyzer (ILA) IP to monitor internal P, Q, and \theta signals live on Basys 3 hardware via USB.
+
 # End:
