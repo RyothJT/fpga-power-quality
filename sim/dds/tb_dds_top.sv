@@ -8,10 +8,21 @@ module tb_dds_top;
   reg  [ 3:0] jitter_depth;
   reg  [ 8:0] sag_factor;
   reg  [ 7:0] current_phase;
+
+  // Voltage Harmonic Amplitude Controls
+  reg  [ 7:0] v_h3_scale;
+  reg  [ 7:0] v_h5_scale;
+  reg  [ 7:0] v_h7_scale;
+
+  // Current Harmonic Amplitude Controls
+  reg  [ 7:0] i_h3_scale;
+  reg  [ 7:0] i_h5_scale;
+  reg  [ 7:0] i_h7_scale;
+
   wire [15:0] v_out;
   wire [15:0] i_out;
 
-  // Instantiate Top DDS Module
+  // Instantiate Top DDS Module with Dual Harmonic Controls
   dds_top uut (
       .clk(clk),
       .rst(rst),
@@ -19,6 +30,12 @@ module tb_dds_top;
       .jitter_depth(jitter_depth),
       .sag_factor(sag_factor),
       .current_phase(current_phase),
+      .v_h3_scale(v_h3_scale),
+      .v_h5_scale(v_h5_scale),
+      .v_h7_scale(v_h7_scale),
+      .i_h3_scale(i_h3_scale),
+      .i_h5_scale(i_h5_scale),
+      .i_h7_scale(i_h7_scale),
       .v_out(v_out),
       .i_out(i_out)
   );
@@ -31,27 +48,48 @@ module tb_dds_top;
     clk = 0;
     rst = 1;
     jitter_en = 0;
-    jitter_depth = 4'd15;
-    sag_factor = 9'd256;  // 100% nominal voltage
+    jitter_depth = 4'd12;
+    sag_factor = 9'd128;  // Nominal voltage (100%)
     current_phase = 8'd32;  // ~45 degree phase shift on Current (32/256 * 360)
+
+    // Start with clean fundamental sine waves (0% harmonics)
+    v_h3_scale = 8'd0;
+    v_h5_scale = 8'd0;
+    v_h7_scale = 8'd0;
+
+    i_h3_scale = 8'd0;
+    i_h5_scale = 8'd0;
+    i_h7_scale = 8'd0;
 
     #100;
     rst = 0;
 
-    // Run nominal grid output for 30 ms (covers ~1.8 grid cycles)
+    // --- Phase 1: Pure Fundamental Waveforms ---
+    $display("[%0t ns] Phase 1: Clean fundamental V and I waveforms...", $time);
     #300_000;
 
-    // Trigger a 50% Voltage Sag
-    $display("[%0t ns] Injecting 50%% Voltage Sag...", $time);
-    sag_factor = 8'd128;
+    // --- Phase 2: Heavy Current Harmonics (Typical Non-Linear Load) ---
+    $display("[%0t ns] Phase 2: Injecting high current harmonics (30%% 3rd, 15%% 5th, 8%% 7th)...",
+             $time);
+    v_h3_scale = 8'd8;  // Mild voltage distortion (~3%)
+    v_h5_scale = 8'd5;  // (~2%)
+    v_h7_scale = 8'd0;
 
-    #200_000;
+    i_h3_scale = 8'd77;  // Severe current distortion (~30%)
+    i_h5_scale = 8'd38;  // (~15%)
+    i_h7_scale = 8'd20;  // (~8%)
+    #300_000;
 
-    // Recover Voltage and Inject Phase Jitter
-    $display("[%0t ns] Recovering Voltage & Enabling Jitter...", $time);
-    sag_factor = 8'd255;
+    // --- Phase 3: Voltage Sag Under Heavy Harmonic Load ---
+    $display("[%0t ns] Phase 3: Injecting 50%% Voltage Sag under harmonic load...", $time);
+    sag_factor = 9'd64;  // 50% scale
+    v_h7_scale = 8'd128;
+    #300_000;
+
+    // --- Phase 4: Recovery & Jitter Injection ---
+    $display("[%0t ns] Phase 4: Recovering Voltage & Enabling Jitter...", $time);
+    sag_factor = 9'd128;  // 100% scale
     jitter_en  = 1;
-
     #300_000;
 
     $display("[%0t ns] Simulation Complete.", $time);
