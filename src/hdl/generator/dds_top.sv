@@ -9,7 +9,7 @@ module dds_top #(
     // Anomaly Controls
     input wire       jitter_en,     // Enable phase jitter injection
     input wire [3:0] jitter_depth,  // Jitter magnitude scaling (0 to 15)
-    input wire [8:0] sag_factor,    // Q1.8 scaling: 256 = 100% (nominal), 128 = 50% sag, 0 = 0%
+    input wire [7:0] sag_factor,    // range from 0-255, with 255 representing ~200% normal voltage
     input wire [7:0] current_phase, // Current fundamental phase offset (0-255 maps to 0-360 deg)
 
     // Voltage Harmonic Amplitude Controls (Q0.8 fixed-point: 0 = 0%, 25 = ~10%)
@@ -158,8 +158,8 @@ module dds_top #(
 // =========================================================================
   // Sag & Scale Adjustments (Q1.15 * Q1.8 >> 8)
   // =========================================================================
-  wire signed [24:0] v_mult = v_composite * $signed({1'b0, sag_factor});
-  wire signed [24:0] i_mult = i_composite * $signed({1'b0, sag_factor});
+  wire signed [23:0] v_mult = v_composite * $signed({1'b0, sag_factor});
+  wire signed [23:0] i_mult = i_composite * $signed({1'b0, sag_factor});
 
   wire signed [15:0] v_scaled = v_mult >>> 8;
   wire signed [15:0] i_scaled = i_mult >>> 8;

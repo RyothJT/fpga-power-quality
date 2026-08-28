@@ -6,7 +6,7 @@ module tb_dds_top;
   reg         rst;
   reg         jitter_en;
   reg  [ 3:0] jitter_depth;
-  reg  [ 8:0] sag_factor;
+  reg  [ 7:0] sag_factor;
   reg  [ 7:0] current_phase;
 
   // Voltage Harmonic Amplitude Controls
@@ -49,7 +49,8 @@ module tb_dds_top;
     rst = 1;
     jitter_en = 0;
     jitter_depth = 4'd12;
-    sag_factor = 9'd128;  // Nominal voltage (100%)
+    sag_factor = 8'd128;  // Nominal voltage (100%)
+                          // range from 0-255, with 255 representing ~200% normal voltage.
     current_phase = 8'd32;  // ~45 degree phase shift on Current (32/256 * 360)
 
     // Start with clean fundamental sine waves (0% harmonics)
@@ -82,13 +83,13 @@ module tb_dds_top;
 
     // --- Phase 3: Voltage Sag Under Heavy Harmonic Load ---
     $display("[%0t ns] Phase 3: Injecting 50%% Voltage Sag under harmonic load...", $time);
-    sag_factor = 9'd64;  // 50% scale
+    sag_factor = 8'd64;  // 50% scale
     v_h7_scale = 8'd128;
     #300_000;
 
     // --- Phase 4: Recovery & Jitter Injection ---
     $display("[%0t ns] Phase 4: Recovering Voltage & Enabling Jitter...", $time);
-    sag_factor = 9'd128;  // 100% scale
+    sag_factor = 8'd128;  // 100% scale
     jitter_en  = 1;
     #300_000;
 
