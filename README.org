@@ -6,7 +6,7 @@ A high-performance Verilog implementation of a Hardware-in-the-Loop (HIL) AC pow
 
 * Architecture & Features
 
-** Digital Signal Generation (~dds_top.v~)
+** Digital Signal Generation (~dds_top.sv~)
 - *Fundamental Synthesis:* Synthesizes 60 Hz fundamental grid voltage (V) and current (I) waveforms driven by a 100 MHz clock using a 32-bit Direct Digital Synthesizer (DDS) phase accumulator.
 - *Dual-Channel Harmonic Engine:* Independent Q0.8 fixed-point scaling for 3^{rd} (180 Hz), 5^{th} (300 Hz), and 7^{th} (420 Hz) odd harmonics across both V and I paths. Current harmonics are phase-aligned with fundamental current to model non-linear load behaviors.
 - *Anomaly Modeling:*
@@ -15,12 +15,12 @@ A high-performance Verilog implementation of a Hardware-in-the-Loop (HIL) AC pow
   - Dynamic fundamental phase offset control between V and I for power factor modeling.
 
 ** Signal Conditioning & Sampling
-- *XADC Interface:* Integration hook for the Xilinx XADC IP block (~xadc_interface.v~) to map external analog inputs or internal digital streams into signed 16-bit Q1.15 fixed-point vectors.
+- *XADC Interface:* Integration hook for the Xilinx XADC IP block (~xadc_interface.sv~) to map external analog inputs or internal digital streams into signed 16-bit Q1.15 fixed-point vectors.
 
 ** Core Algorithmic Modules
-- *SOGI-PLL Engine:* Second-Order Generalized Integrator (~sogi_core.v~) creating orthogonal \alpha/\beta signals, coupled with Park Transformation (~park_transform.v~) and a PI controller (~pi_controller.v~) to track fundamental phase angle (\theta) and frequency.
+- *SOGI-PLL Engine:* Integrated Frequency-Adaptive SOGI (=sogi_pll_top.sv=) with internal sine/cosine lookup (=sogi_sine_rom=), Park Transformation, and PI loop filtering to track orthogonal $\alpha/\beta$ components, grid phase angle (=theta=), and measured frequency (=freq_out=).
 - *Real-Time Power Calculation Engine:* Computes Instantaneous Active Power (P = V \cdot I), Reactive Power (Q), and real-time RMS metrics using fixed-point arithmetic.
-- *Harmonic Analysis Engine:* Evaluates Total Harmonic Distortion (THD) across sampled waveforms via Goertzel or FFT filtering (~thd_analyzer.v~).
+- *Harmonic Analysis Engine:* Evaluates Total Harmonic Distortion (THD) across sampled waveforms via Goertzel or FFT filtering (~thd_analyzer.sv~).
 
 ** Verification & Tooling Workflow
 - Automated simulation runner via ~run_sim.py~ using Icarus Verilog (~iverilog~) and Surfer / GTKWave waveform visualization.
@@ -66,13 +66,13 @@ python3 run_sim.py tb_dds_top
 * Phase 1 Execution Roadmap & TODOs
 
 ** Digital Signal Generation (Internal Grid Model)
-*** DONE Implement fundamental 60 Hz DDS sine wave lookup table (~dds_sine_rom.v~).
+*** DONE Implement fundamental 60 Hz DDS sine wave lookup table (~dds_sine_rom.sv~).
 CLOSED: [2026-08-28 Fri 15:45]
 - State "DONE"       from "TODO"       [2026-08-28 Fri 15:45]
-*** DONE Add dynamic Q1.8 voltage sag scaling logic into ~dds_top.v~.
+*** DONE Add dynamic Q1.8 voltage sag scaling logic into ~dds_top.sv~.
 CLOSED: [2026-08-28 Fri 15:45]
 - State "DONE"       from "TODO"       [2026-08-28 Fri 15:45]
-*** DONE Integrate LFSR pseudo-random phase jitter injection (~lfsr_random.v~).
+*** DONE Integrate LFSR pseudo-random phase jitter injection (~lfsr_random.sv~).
 CLOSED: [2026-08-28 Fri 15:45]
 - State "DONE"       from "TODO"       [2026-08-28 Fri 15:45]
 *** DONE Add independent Q0.8 scaling for 3^{rd}, 5^{th}, and 7^{th} odd harmonics on Voltage (V).
@@ -83,18 +83,19 @@ CLOSED: [2026-08-28 Fri 15:45]
 - State "DONE"       from "TODO"       [2026-08-28 Fri 15:45]
 *** TODO Verify full range fundamental phase offset control (\phi) between V and I for power factor sweep (0 \le \phi \le 360^\circ).
 *** TODO Implement overflow saturation flags (~v_clip~, ~i_clip~) for hardware monitoring.
+*** TODO Combine and parameterize sine ROMs for DDS and PLL.
 
 ** Signal Conditioning & Sampling Interface
 *** TODO Instantiate and configure Xilinx XADC IP block for sampling dual analog inputs or streaming internal digital vectors.
-*** TODO Write XADC interface module (~xadc_interface.v~) to convert raw XADC samples into 16-bit Q1.15 fixed-point V and I data buses.
+*** TODO Write XADC interface module (~xadc_interface.sv~) to convert raw XADC samples into 16-bit Q1.15 fixed-point V and I data buses.
 
 ** Core Algorithmic Modules (HDL)
-*** TODO Implement ~sogi_core.v~ (Second-Order Generalized Integrator producing in-phase \alpha and quadrature \beta signals).
-*** TODO Implement Park Transformation (\alpha\beta \to dq) module (~park_transform.v~).
-*** TODO Implement PI Loop Filter (~pi_controller.v~) for continuous phase/frequency error tracking (57 Hz \le f \le 63 Hz).
-*** TODO Implement ~power_engine.v~ using fixed-point multipliers to compute Instantaneous Active Power (P = V \cdot I) and Reactive Power (Q).
+*** DONE Implement PI Loop Filter (~sogi_pll_top.sv~) for continuous phase/frequency error tracking (57 Hz \le f \le 63 Hz).
+CLOSED: [2026-08-29 Sat 15:52]
+- State "DONE"       from "TODO"       [2026-08-29 Sat 15:52]
+*** TODO Implement ~power_engine.sv~ using fixed-point multipliers to compute Instantaneous Active Power (P = V \cdot I) and Reactive Power (Q).
 *** TODO Implement moving average / IIR filter for real-time V_{RMS} and I_{RMS} calculation.
-*** TODO Implement Total Harmonic Distortion (THD) estimator block (~thd_analyzer.v~).
+*** TODO Implement Total Harmonic Distortion (THD) estimator block (~thd_analyzer.sv~).
 
 ** Verification & Hardware Testing
 *** TODO Write Vivado testbenches validating PLL lock speed during transient sags and phase jumps.
