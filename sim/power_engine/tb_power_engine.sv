@@ -2,7 +2,7 @@
 
 module tb_power_engine;
 
-  localparam real CLOCK_FREQ_HZ = 100_000_000.0;
+  localparam real CLOCK_FREQ_HZ = 1_000_000.0;
   localparam real CENTER_FREQ_HZ = 60.0;
   localparam real CLK_PERIOD_NS = 1_000_000_000.0 / CLOCK_FREQ_HZ;
   localparam real GRID_PERIOD_NS = 1_000_000_000.0 / CENTER_FREQ_HZ;
