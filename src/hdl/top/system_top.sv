@@ -120,7 +120,8 @@ module system_top #(
   // -------------------------------------------------------------------------
   sogi_qsg #(
       .CLOCK_FREQ_HZ (CLOCK_FREQ_HZ),
-      .CENTER_FREQ_HZ(CENTER_FREQ_HZ)
+      .CENTER_FREQ_HZ(CENTER_FREQ_HZ),
+      .ENABLE_FREQ_ADAPT(0)
   ) u_current_qsg (
       .clk    (clk),
       .rst_n  (rst_n),

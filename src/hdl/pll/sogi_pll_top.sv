@@ -3,8 +3,8 @@
 module sogi_pll_top #(
     parameter real CLOCK_FREQ_HZ = 100_000_000.0,
     parameter real CENTER_FREQ_HZ = 60.0,
-    parameter logic [15:0] LOCK_THRESH = 16'd400,  // Lock threshold (lower bound)
-    parameter logic [15:0] UNLOCK_THRESH = 16'd800,  // Unlock threshold (upper bound)
+    parameter logic [15:0] LOCK_THRESH = 16'd600,  // Lock threshold (lower bound)
+    parameter logic [15:0] UNLOCK_THRESH = 16'd1200,  // Unlock threshold (upper bound)
     parameter logic [15:0] MIN_AMP_THRESH = 16'd2000,  // Minimum grid amplitude threshold
     parameter int CONSECUTIVE_LOCK_CYCLES = 3  // Cycles inside window to lock
 ) (
@@ -40,6 +40,7 @@ module sogi_pll_top #(
   localparam logic [31:0] MAX_PERIOD_CLKS = 32'($rtoi(NOMINAL_PERIOD_CLKS * 1.15));
 
   logic [31:0] phase_inc;
+  logic [31:0] phase_inc_smoothed;
 
   // -------------------------------------------------------------------------
   // 1. SOGI-QSG Sub-module Instance (Generates v_alpha & v_beta)
@@ -48,12 +49,13 @@ module sogi_pll_top #(
       .CLOCK_FREQ_HZ (CLOCK_FREQ_HZ),
       .CENTER_FREQ_HZ(CENTER_FREQ_HZ)
   ) u_sogi_qsg (
-      .clk    (clk),
-      .rst_n  (rst_n),
-      .u_in   (v_in),
-      .k_sogi (k_sogi),
-      .u_alpha(v_alpha),
-      .u_beta (v_beta)
+      .clk         (clk),
+      .rst_n       (rst_n),
+      .u_in        (v_in),
+      .k_sogi      (k_sogi),
+      .phase_inc_in(phase_inc_smoothed),
+      .u_alpha     (v_alpha),
+      .u_beta      (v_beta)
   );
 
   // -------------------------------------------------------------------------
@@ -137,7 +139,7 @@ module sogi_pll_top #(
   end
 
   // -------------------------------------------------------------------------
-  // 5. Output & Phase-Reset Frequency Measurement (Q8.8 Format)
+  // 5. Output & Phase-Reset Frequency Measurement & Smoothed Phase Inc
   // -------------------------------------------------------------------------
   assign theta = phase_acc[31:16];
 
@@ -174,16 +176,28 @@ module sogi_pll_top #(
   logic [31:0] clk_counter;
   logic [31:0] measured_period_clks;
 
+  // Accumulator for period-averaging phase_inc
+  logic [63:0] phase_inc_sum;
+
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       clk_counter          <= '0;
       measured_period_clks <= NOMINAL_PERIOD_CLKS;
+      phase_inc_sum        <= '0;
+      phase_inc_smoothed   <= NOMINAL_PHASE_INC;
     end else begin
-      clk_counter <= clk_counter + 1'b1;
+      clk_counter   <= clk_counter + 1'b1;
+      phase_inc_sum <= phase_inc_sum + 64'(phase_inc);
 
       if (phase_reset_pulse) begin
         measured_period_clks <= clk_counter;
         clk_counter          <= '0;
+
+        // Average phase_inc over the completed 60 Hz fundamental period
+        if (clk_counter > 0) begin
+          phase_inc_smoothed <= 32'(phase_inc_sum / 64'(clk_counter));
+        end
+        phase_inc_sum <= '0;
       end
     end
   end

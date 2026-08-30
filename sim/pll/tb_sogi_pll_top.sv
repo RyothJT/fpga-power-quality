@@ -5,13 +5,13 @@ module tb_sogi_pll_top;
   // -------------------------------------------------------------------------
   // Primary Parameters
   // -------------------------------------------------------------------------
-  localparam real SIM_CLK_FREQ_HZ = 100_000.0;  // Simulation clock frequency
+  localparam real SIM_CLK_FREQ_HZ = 1_000_000.0;  // Simulation clock frequency
   localparam real CENTER_FREQ_HZ = 60.0;  // Fundamental nominal grid frequency
 
   // -------------------------------------------------------------------------
   // Relative Frequency Variations (Derived off CENTER_FREQ_HZ)
   // -------------------------------------------------------------------------
-  localparam real FREQ_HIGH_1_HZ = CENTER_FREQ_HZ * 1.0333;  // +3.33% (62 Hz)
+  localparam real FREQ_HIGH_1_HZ = CENTER_FREQ_HZ * 1.00833;  // +0.833% (60.5 Hz)
   localparam real FREQ_LOW_HZ = CENTER_FREQ_HZ * 0.9667;  // -3.33% (58 Hz)
   localparam real FREQ_HIGH_2_HZ = CENTER_FREQ_HZ * 1.0833;  // +8.33% (65 Hz)
 

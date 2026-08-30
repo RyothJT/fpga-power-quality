@@ -220,7 +220,8 @@ module tb_system_top;
     i_h7_scale    = 8'd0;
 
     // Standard SOGI and PI Control Loop Gains
-    k_sogi        = 16'sd16384;  // K_sogi = 1.0 (Q1.14)
+    // k_sogi        = 16'sd16384;  // K_sogi = 1.0 (Q1.14)
+    k_sogi        = 16'sd8192;  // K_sogi = 0.5 (Q1.14)
     kp_pll        = 16'sd120;  // Proportional Gain
     ki_pll        = 16'sd40;  // Integral Gain
 
