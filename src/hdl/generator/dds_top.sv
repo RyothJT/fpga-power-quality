@@ -172,18 +172,16 @@ module dds_top #(
   wire signed [17:0] i_scaled = i_scaled_full >>> 15;
 
   // -------------------------------------------------------------------------
-  // Saturation Guard
+  // Saturation Guard (Continuous Ternary Assignments)
   // -------------------------------------------------------------------------
-  reg signed [15:0] v_sat, i_sat;
-  always_comb begin
-    if (v_scaled > 18'sd32767) v_sat = 16'sd32767;
-    else if (v_scaled < -18'sd32768) v_sat = -16'sd32768;
-    else v_sat = v_scaled[15:0];
+  wire [15:0] v_sat, i_sat;
+  assign v_sat = (v_scaled > 32'sd32767)  ? 16'sd32767  :
+                      (v_scaled < -32'sd32768) ? -16'sd32768 :
+                      v_scaled[15:0];
 
-    if (i_scaled > 18'sd32767) i_sat = 16'sd32767;
-    else if (i_scaled < -18'sd32768) i_sat = -16'sd32768;
-    else i_sat = i_scaled[15:0];
-  end
+  assign i_sat = (i_scaled > 32'sd32767)  ? 16'sd32767  :
+                      (i_scaled < -32'sd32768) ? -16'sd32768 :
+                      i_scaled[15:0];
 
   assign v_out = v_sat;
   assign i_out = i_sat;
