@@ -7,13 +7,12 @@ module dds_top #(
     input wire clk,
     input wire rst,
 
-    // Dynamic Frequency Control (Q16.8 Hz format to support up to 65.5 kHz)
-    // Example: 60.0 Hz = 24'd15360, 6000.0 Hz = 24'd1536000
+    // Dynamic Frequency Control (Q16.8 Hz format)
     input wire [23:0] center_freq,
 
     // Primary Wave Amplitude Controls
-    input wire [14:0] v_peak,        // Voltage magnitude scaling (Q0.15 unsigned)
-    input wire [14:0] i_peak,        // Current magnitude scaling (Q0.15 unsigned)
+    input wire [14:0] v_peak,        // Q0.15 unsigned
+    input wire [14:0] i_peak,        // Q0.15 unsigned
     input wire        jitter_en,
     input wire [ 3:0] jitter_depth,
     input wire [ 7:0] current_phase,
@@ -33,14 +32,7 @@ module dds_top #(
 );
 
   // -------------------------------------------------------------------------
-  // Base Phase Increment Calculation
-  // M_BASE = center_freq_Hz * 2^32 / CLOCK_FREQ_HZ
-  // center_freq is Q16.8 (val * 256), so center_freq_Hz = center_freq / 256
-  // M_BASE = (center_freq / 256) * 4294967296 / 100_000_000
-  //        = center_freq * 167.77216
-  //
-  // Multiplier in Q0.16 = 167.77216 * 65536 = 10,994,784 (32'd10994784)
-  // Product width: 24 bits * 32 bits = 56 bits. Shift right by 16 bits for M_BASE.
+  // Base Phase Increment Calculation (Uncorrupted by Jitter)
   // -------------------------------------------------------------------------
   localparam real SCALE_R = (16777216.0 / CLOCK_FREQ_HZ) * 65536.0;
   localparam logic [31:0] FREQ_MULT = 32'($rtoi(SCALE_R));
@@ -49,6 +41,19 @@ module dds_top #(
   wire [31:0] m_base = m_base_full[47:16];
 
   reg  [31:0] phase_acc;
+
+  // Ideal, un-jittered phase accumulator step guarantees 60.000 Hz center
+  always_ff @(posedge clk or posedge rst) begin
+    if (rst) begin
+      phase_acc <= 32'd0;
+    end else begin
+      phase_acc <= phase_acc + m_base;
+    end
+  end
+
+  // -------------------------------------------------------------------------
+  // LFSR & Post-Accumulator Phase Jitter Injection (Scaled)
+  // -------------------------------------------------------------------------
   wire [15:0] rnd_word;
 
   lfsr_random u_lfsr (
@@ -57,22 +62,22 @@ module dds_top #(
       .rnd_out(rnd_word)
   );
 
-  wire signed [15:0] jitter_val = jitter_en ? ($signed(rnd_word) >>> (16 - jitter_depth)) : 16'd0;
-  wire        [31:0] m_actual = m_base + {{16{jitter_val[15]}}, jitter_val};
+  // Attenuate LFSR output so jitter_depth maxes out at a manageable phase window
+  // Shift right by 4 base bits + (8 - jitter_depth)
+  // Depth 8 -> max +/-8 ROM steps (+/- 11.25 degrees)
+  // Depth 1 -> max +/-1 ROM step  (+/- 1.4 degrees)
+  wire signed [7:0] phase_jitter = jitter_en ? ($signed(
+      rnd_word[15:8]
+  ) >>> (12 - jitter_depth)) : 8'sd0;
 
-  always_ff @(posedge clk or posedge rst) begin
-    if (rst) begin
-      phase_acc <= 32'd0;
-    end else begin
-      phase_acc <= phase_acc + m_actual;
-    end
-  end
+  // Add phase noise directly to ROM address bus
+  wire [7:0] phase_jittered = phase_acc[31:24] + $unsigned(phase_jitter);
 
   // -------------------------------------------------------------------------
   // Address Generation
   // -------------------------------------------------------------------------
-  wire [7:0] v_addr_h1 = phase_acc[31:24];
-  wire [7:0] i_addr_h1 = phase_acc[31:24] + current_phase;
+  wire [7:0] v_addr_h1 = phase_jittered;
+  wire [7:0] i_addr_h1 = phase_jittered + current_phase;
 
   wire [7:0] v_addr_h3 = v_addr_h1 * 8'd3;
   wire [7:0] v_addr_h5 = v_addr_h1 * 8'd5;

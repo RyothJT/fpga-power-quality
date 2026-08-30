@@ -5,8 +5,8 @@ module tb_sogi_pll_top;
   // -------------------------------------------------------------------------
   // Primary Parameters
   // -------------------------------------------------------------------------
-  localparam real SIM_CLK_FREQ_HZ = 1_000_000.0;  // Simulation clock frequency
-  localparam real CENTER_FREQ_HZ = 60.0;  // Fundamental nominal grid frequency
+  localparam real SIM_CLK_FREQ_HZ = 100_000_000.0;  // Simulation clock frequency
+  localparam real CENTER_FREQ_HZ = 6000.0;  // Fundamental nominal grid frequency
 
   // -------------------------------------------------------------------------
   // Relative Frequency Variations (Derived off CENTER_FREQ_HZ)
@@ -37,7 +37,7 @@ module tb_sogi_pll_top;
   logic signed [15:0] k_sogi, kp_pll, ki_pll;
   logic signed [15:0] v_alpha, v_beta, v_d, v_q;
   logic [15:0] theta;
-  logic [15:0] freq_out;
+  logic [15:-8] freq_out;
   logic        pll_locked;
 
   // Testbench Variables
@@ -64,7 +64,7 @@ module tb_sogi_pll_top;
     // SOGI Damping Factor k = 1.414 (in Q1.14)
     k_sogi = 16'sd16384;
     kp_pll = 16'sd120;
-    ki_pll = 16'sd2;
+    ki_pll = 16'sd40;
 
     #(SIM_CLK_PERIOD_US * 10);
     rst_n = 1;
