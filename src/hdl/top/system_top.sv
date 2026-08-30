@@ -1,54 +1,74 @@
 `timescale 1ns / 1ps
 
+/**
+ * Module: system_top
+ * Description: Top-level integration module connecting DDS signal generation,
+ *              Voltage SOGI-PLL tracking, Current SOGI-QSG phase generation,
+ *              and instantaneous/average power calculation engine.
+ */
 module system_top #(
     parameter real CLOCK_FREQ_HZ  = 100_000_000.0,
     parameter real CENTER_FREQ_HZ = 60.0
 ) (
-    input  logic        clk,
-    input  logic        rst_n,
+    input logic clk,
+    input logic rst_n,
 
-    // DDS Control Inputs
-    input  logic [23:0] center_freq,    // Frequency in Q16.8 format (e.g., 60 Hz = 24'd15360)
-    input  logic [14:0] v_peak,         // Voltage magnitude scaling (Q0.15)
-    input  logic [14:0] i_peak,         // Current magnitude scaling (Q0.15)
-    input  logic        jitter_en,
-    input  logic [ 3:0] jitter_depth,
-    input  logic [ 7:0] current_phase,
+    // DDS Signal Synthesizer Controls
+    input logic [23:0] center_freq,   // Frequency in Q16.8 format (e.g., 60 Hz = 24'd15360)
+    input logic [14:0] v_peak,        // Voltage magnitude scaling (Q0.15)
+    input logic [14:0] i_peak,        // Current magnitude scaling (Q0.15)
+    input logic        jitter_en,
+    input logic [ 3:0] jitter_depth,
+    input logic [ 7:0] current_phase,
 
     // Voltage Harmonic Controls (Q0.8)
-    input  logic [ 7:0] v_h3_scale,
-    input  logic [ 7:0] v_h5_scale,
-    input  logic [ 7:0] v_h7_scale,
+    input logic [7:0] v_h3_scale,
+    input logic [7:0] v_h5_scale,
+    input logic [7:0] v_h7_scale,
 
     // Current Harmonic Controls (Q0.8)
-    input  logic [ 7:0] i_h3_scale,
-    input  logic [ 7:0] i_h5_scale,
-    input  logic [ 7:0] i_h7_scale,
+    input logic [7:0] i_h3_scale,
+    input logic [7:0] i_h5_scale,
+    input logic [7:0] i_h7_scale,
 
-    // SOGI-PLL Control Inputs
-    input  logic signed [15:0] k_sogi,  // 16'sd16384 = 1.0 (Q1.14)
-    input  logic signed [15:0] kp_pll,  // Proportional gain
-    input  logic signed [15:0] ki_pll,  // Integral gain
+    // SOGI Control Gains
+    input logic signed [15:0] k_sogi,  // Gain factor (16'sd16384 = 1.0, Q1.14)
+    input logic signed [15:0] kp_pll,  // Proportional gain for PLL
+    input logic signed [15:0] ki_pll,  // Integral gain for PLL
 
-    // Synthesized Signals Output
+    // Synthesized Line Waveforms
     output logic signed [15:0] v_out,
     output logic signed [15:0] i_out,
 
-    // SOGI-PLL Telemetry Outputs
-    output logic signed [15:0] v_alpha,
-    output logic signed [15:0] v_beta,
-    output logic signed [15:0] v_d,
-    output logic signed [15:0] v_q,
-    output logic        [15:0] theta,
+    // Voltage Quadrature & PLL Telemetry
+    output logic signed [ 15:0] v_alpha,
+    output logic signed [ 15:0] v_beta,
+    output logic signed [ 15:0] v_d,
+    output logic signed [ 15:0] v_q,
+    output logic        [ 15:0] theta,
     output logic        [15:-8] freq_out,
-    output logic               pll_locked
+    output logic                pll_locked,
+
+    // Current Quadrature Outputs
+    output logic signed [15:0] i_alpha,
+    output logic signed [15:0] i_beta,
+
+    // Power Engine Calculated Metrics
+    output logic signed [15:0] p_inst,
+    output logic signed [15:0] q_inst,
+    output logic signed [15:0] p_avg,
+    output logic signed [15:0] q_avg,
+    output logic        [15:0] v_rms,
+    output logic        [15:0] i_rms
 );
 
-  // Synchronous Reset Inversion for DDS (DDS expects active-high reset)
+  // -------------------------------------------------------------------------
+  // Reset Inversion for DDS Sub-module
+  // -------------------------------------------------------------------------
   wire dds_rst = ~rst_n;
 
   // -------------------------------------------------------------------------
-  // 1. Direct Digital Synthesizer (DDS) Generator Core
+  // 1. Direct Digital Synthesizer (DDS) Core
   // -------------------------------------------------------------------------
   dds_top #(
       .CLOCK_FREQ_HZ(CLOCK_FREQ_HZ)
@@ -72,7 +92,8 @@ module system_top #(
   );
 
   // -------------------------------------------------------------------------
-  // 2. Second-Order Generalized Integrator PLL (SOGI-PLL)
+  // 2. Voltage Phase-Locked Loop (SOGI-PLL)
+  //    (Instantiates internal SOGI-QSG to produce v_alpha & v_beta)
   // -------------------------------------------------------------------------
   sogi_pll_top #(
       .CLOCK_FREQ_HZ (CLOCK_FREQ_HZ),
@@ -80,7 +101,7 @@ module system_top #(
   ) u_pll (
       .clk       (clk),
       .rst_n     (rst_n),
-      .v_in      (v_out),       // Drive PLL with synthesized grid voltage
+      .v_in      (v_out),
       .k_sogi    (k_sogi),
       .kp_pll    (kp_pll),
       .ki_pll    (ki_pll),
@@ -91,6 +112,43 @@ module system_top #(
       .theta     (theta),
       .freq_out  (freq_out),
       .pll_locked(pll_locked)
+  );
+
+  // -------------------------------------------------------------------------
+  // 3. Current SOGI-QSG
+  //    Generates 90-degree orthogonal current signals (i_alpha & i_beta)
+  // -------------------------------------------------------------------------
+  sogi_qsg #(
+      .CLOCK_FREQ_HZ (CLOCK_FREQ_HZ),
+      .CENTER_FREQ_HZ(CENTER_FREQ_HZ)
+  ) u_current_qsg (
+      .clk    (clk),
+      .rst_n  (rst_n),
+      .u_in   (i_out),
+      .k_sogi (k_sogi),
+      .u_alpha(i_alpha),
+      .u_beta (i_beta)
+  );
+
+  // -------------------------------------------------------------------------
+  // 4. Power & RMS Metrics Engine
+  // -------------------------------------------------------------------------
+  power_engine #(
+      .CLOCK_FREQ_HZ (CLOCK_FREQ_HZ),
+      .CENTER_FREQ_HZ(CENTER_FREQ_HZ)
+  ) u_power (
+      .clk    (clk),
+      .rst_n  (rst_n),
+      .v_alpha(v_alpha),
+      .v_beta (v_beta),
+      .i_alpha(i_alpha),
+      .i_beta (i_beta),
+      .p_inst (p_inst),
+      .q_inst (q_inst),
+      .p_avg  (p_avg),
+      .q_avg  (q_avg),
+      .v_rms  (v_rms),
+      .i_rms  (i_rms)
   );
 
 endmodule

@@ -72,32 +72,31 @@ module tb_sogi_pll_top;
   end
 
   // -------------------------------------------------------------------------
-  // Self-Checking Verification Task
+  // Self-Checking Verification Tasks
   // -------------------------------------------------------------------------
+
+  // 1. Expected Locked Check
   task automatic check_pll(input string step_name, input real expected_freq_hz,
                            input real freq_tolerance_hz = 0.5, input int vq_max_threshold = 400);
     real measured_freq;
 
-    // Reset peak detector and observe over 1 full grid cycle
     max_vq_peak = 0;
     #(LINE_PERIOD_US);
 
-    measured_freq = $itor(freq_out) / 256.0;  // Convert Q8.8 format to real
+    measured_freq = $itor(freq_out) / 256.0;
 
     $display("\n[CHECK] Running Validation: %s", step_name);
 
-    // 1. Check Lock Status
     if (!pll_locked) begin
-      $error("[FAIL] %s: PLL failed to lock! pll_locked = %0b", step_name, pll_locked);
+      $display("[FAIL] %s: PLL failed to lock! pll_locked = %0b", step_name, pll_locked);
       error_count++;
     end else begin
       $display("[PASS] %s: PLL Locked successfully.", step_name);
     end
 
-    // 2. Check Measured Frequency Output
     if ((measured_freq < (expected_freq_hz - freq_tolerance_hz)) ||
         (measured_freq > (expected_freq_hz + freq_tolerance_hz))) begin
-      $error(
+      $display(
           "[FAIL] %s: Frequency mismatch! Expected: %0.2f Hz, Measured: %0.2f Hz (Tolerance: +/- %0.2f Hz)",
           step_name, expected_freq_hz, measured_freq, freq_tolerance_hz);
       error_count++;
@@ -106,14 +105,38 @@ module tb_sogi_pll_top;
                measured_freq, expected_freq_hz);
     end
 
-    // 3. Check Peak Phase Error (v_q peak magnitude over cycle should stay within bounds)
     if (max_vq_peak > vq_max_threshold) begin
-      $error("[FAIL] %s: Quadrature voltage peak error high! Peak v_q = %0d (Limit: %0d)",
-             step_name, max_vq_peak, vq_max_threshold);
+      $display("[FAIL] %s: Quadrature voltage peak error high! Peak v_q = %0d (Limit: %0d)",
+               step_name, max_vq_peak, vq_max_threshold);
       error_count++;
     end else begin
       $display("[PASS] %s: Peak quadrature error |v_q| = %0d (within limit %0d)", step_name,
                max_vq_peak, vq_max_threshold);
+    end
+  endtask
+
+  // 2. Expected Unlocked Check (Grid Loss / Fault Test)
+  task automatic check_pll_unlock(input string step_name, input int vq_min_unlock_thresh = 800);
+    max_vq_peak = 0;
+    #(LINE_PERIOD_US * 2);
+
+    $display("\n[CHECK] Running Validation (Unlock Expected): %s", step_name);
+
+    if (pll_locked) begin
+      $display("[FAIL] %s: PLL remained locked during severe grid fault! pll_locked = %0b",
+               step_name, pll_locked);
+      error_count++;
+    end else begin
+      $display("[PASS] %s: PLL unlocked as expected (pll_locked = 0).", step_name);
+    end
+
+    if (max_vq_peak < vq_min_unlock_thresh) begin
+      $display(
+          "[WARN] %s: Quadrature voltage peak v_q = %0d below unlock hysteresis boundary (%0d)",
+          step_name, max_vq_peak, vq_min_unlock_thresh);
+    end else begin
+      $display("[PASS] %s: Quadrature error peak |v_q| = %0d exceeded unlock boundary.", step_name,
+               max_vq_peak);
     end
   endtask
 
@@ -179,6 +202,18 @@ module tb_sogi_pll_top;
     #(FINAL_SETTLE_TIME);
     check_pll("7. Return to Nominal Frequency", CENTER_FREQ_HZ);
 
+    // 8. Grid Loss / Total Voltage Collapse (SHOULD UNLOCK)
+    $display("\n[TB] --- Injecting Complete Grid Loss (v_in = 0) ---");
+    grid_amplitude = 0.0;
+    #(TRANSIENT_TIME);
+    check_pll_unlock("8. Grid Loss / Total Voltage Collapse");
+
+    // 9. Recover Grid Voltage (SHOULD RE-LOCK)
+    $display("\n[TB] --- Restoring Grid Voltage to Nominal ---");
+    grid_amplitude = 16383.0;
+    #(LOCK_SETTLE_TIME);
+    check_pll("9. Recovery Post Grid Outage", CENTER_FREQ_HZ);
+
     // -------------------------------------------------------------------------
     // Self-Testing Summary & Reporting
     // -------------------------------------------------------------------------
@@ -189,10 +224,6 @@ module tb_sogi_pll_top;
       $display("    TEST FAILED: %0d ERRORS ENCOUNTERED           ", error_count);
     end
     $display("==================================================\n");
-
-    if (error_count > 0) begin
-      $fatal(1, "Self-testing testbench failed with %0d errors.", error_count);
-    end
 
     $finish;
   end

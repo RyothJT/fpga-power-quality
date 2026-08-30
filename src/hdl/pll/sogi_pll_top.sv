@@ -1,8 +1,12 @@
 `timescale 1ns / 1ps
 
 module sogi_pll_top #(
-    parameter real CLOCK_FREQ_HZ  = 100_000_000.0,
-    parameter real CENTER_FREQ_HZ = 60.0
+    parameter real CLOCK_FREQ_HZ = 100_000_000.0,
+    parameter real CENTER_FREQ_HZ = 60.0,
+    parameter logic [15:0] LOCK_THRESH = 16'd400,  // Lock threshold (lower bound)
+    parameter logic [15:0] UNLOCK_THRESH = 16'd800,  // Unlock threshold (upper bound)
+    parameter logic [15:0] MIN_AMP_THRESH = 16'd2000,  // Minimum grid amplitude threshold
+    parameter int CONSECUTIVE_LOCK_CYCLES = 3  // Cycles inside window to lock
 ) (
     input logic               clk,
     input logic               rst_n,
@@ -30,6 +34,10 @@ module sogi_pll_top #(
 
   localparam logic [31:0] NOMINAL_PERIOD_CLKS = 32'($rtoi(CLOCK_FREQ_HZ / CENTER_FREQ_HZ));
   localparam logic [63:0] FREQ_SCALE = CLOCK_FREQ_HZ * 256.0;
+
+  // Allowed period variation window (+/- 15% of target frequency)
+  localparam logic [31:0] MIN_PERIOD_CLKS = 32'($rtoi(NOMINAL_PERIOD_CLKS * 0.85));
+  localparam logic [31:0] MAX_PERIOD_CLKS = 32'($rtoi(NOMINAL_PERIOD_CLKS * 1.15));
 
   logic [31:0] phase_inc;
 
@@ -96,6 +104,8 @@ module sogi_pll_top #(
   logic signed [31:0] p_term;
   logic signed [31:0] i_term;
   logic signed [31:0] pi_out;
+  localparam real CLK_GAIN_SCALE_R = 100_000_000.0 / CLOCK_FREQ_HZ;
+  localparam logic signed [31:0] CLK_GAIN_SCALE = 32'($rtoi(CLK_GAIN_SCALE_R * 65536.0));  // Q16.16
 
   assign i_term = integrator_acc[47:16];
 
@@ -104,12 +114,16 @@ module sogi_pll_top #(
     pi_out = p_term + i_term;
   end
 
+  logic signed [47:0] ki_scaled;
+  // Scale ki_pll proportionally so loop bandwidth remains fixed in Hz
+  assign ki_scaled = ($signed(v_q) * $signed(ki_pll) * CLK_GAIN_SCALE) >>> 16;
+
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       integrator_acc <= '0;
       phase_acc      <= '0;
     end else begin
-      integrator_acc <= integrator_acc + 48'($signed(v_q) * $signed(ki_pll));
+      integrator_acc <= integrator_acc + 48'(ki_scaled);
       phase_acc      <= phase_acc + phase_inc;
     end
   end
@@ -175,9 +189,74 @@ module sogi_pll_top #(
   end
 
   logic [63:0] freq_calc;
-  assign freq_calc  = FREQ_SCALE / 64'(measured_period_clks);
-  assign freq_out   = freq_calc[23:0];
+  assign freq_calc = FREQ_SCALE / 64'(measured_period_clks);
+  assign freq_out  = freq_calc[23:0];
 
-  assign pll_locked = (v_q > -16'sd400) && (v_q < 16'sd400);
+  // -------------------------------------------------------------------------
+  // 6. Robust Lock-Detector with Fast Instant-Unlock & Synchronous Re-Lock
+  // -------------------------------------------------------------------------
+  logic signed [15:0] v_q_abs, v_alpha_abs, v_beta_abs;
+  logic [47:0] v_q_abs_sum;
+  logic [15:0] v_q_avg;
+  logic [15:0] grid_amp_approx;
+  logic [ 7:0] lock_counter;
+  logic        amp_valid;
+  logic        freq_valid;
+
+  assign v_q_abs         = (v_q < 0) ? -v_q : -(-v_q);  // Safe absolute value calculation
+  assign v_alpha_abs     = (v_alpha < 0) ? -v_alpha : v_alpha;
+  assign v_beta_abs      = (v_beta < 0) ? -v_beta : v_beta;
+
+  // Approximate vector magnitude (|alpha| + |beta|) for grid presence check
+  assign grid_amp_approx = v_alpha_abs + v_beta_abs;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      v_q_abs_sum  <= '0;
+      v_q_avg      <= 16'hFFFF;
+      lock_counter <= '0;
+      pll_locked   <= 1'b0;
+    end else begin
+      v_q_abs_sum <= v_q_abs_sum + 48'(v_q_abs);
+
+      // ---------------------------------------------------------------------
+      // FAST UNLOCK PATH (Evaluated Every Clock Cycle)
+      // ---------------------------------------------------------------------
+      // Instantly drop lock if:
+      //  1. Grid voltage collapses (grid_amp_approx < MIN_AMP_THRESH)
+      //  2. Instantaneous Phase Error spikes high (v_q_abs > UNLOCK_THRESH)
+      // ---------------------------------------------------------------------
+      if ((grid_amp_approx < MIN_AMP_THRESH) || (v_q_abs > UNLOCK_THRESH)) begin
+        pll_locked   <= 1'b0;
+        lock_counter <= '0;
+      end
+
+      // ---------------------------------------------------------------------
+      // SYNCHRONOUS RE-LOCK PATH (Evaluated on Fundamental Period Rollover)
+      // ---------------------------------------------------------------------
+      if (phase_reset_pulse) begin
+        if (measured_period_clks > 0) begin
+          v_q_avg <= 16'(v_q_abs_sum / 48'(measured_period_clks));
+        end
+        v_q_abs_sum <= '0;
+
+        amp_valid = (grid_amp_approx >= MIN_AMP_THRESH);
+        freq_valid = (measured_period_clks >= MIN_PERIOD_CLKS) && 
+                     (measured_period_clks <= MAX_PERIOD_CLKS);
+
+        // Standard Hysteresis & Counter Verification for Re-Locking
+        if (amp_valid && freq_valid && (v_q_avg < LOCK_THRESH) && (v_q_abs <= UNLOCK_THRESH)) begin
+          if (lock_counter < CONSECUTIVE_LOCK_CYCLES) begin
+            lock_counter <= lock_counter + 1'b1;
+          end else begin
+            pll_locked <= 1'b1;
+          end
+        end else if (!amp_valid || !freq_valid || (v_q_avg > UNLOCK_THRESH)) begin
+          lock_counter <= '0;
+          pll_locked   <= 1'b0;
+        end
+      end
+    end
+  end
 
 endmodule
