@@ -1,11 +1,20 @@
 `timescale 1ns / 1ps
 
 module dds_top #(
-    parameter PHASE_ACC_WIDTH = 32,
-    parameter real CLOCK_FREQ_HZ = 100_000_000.0
+    parameter      PHASE_ACC_WIDTH = 32,
+    parameter real CLOCK_FREQ_HZ = 100_000_000.0,
+    // Consistently divide by 100 to match real world conditions with faster simulation
+    parameter real TARGET_SAMPLE_RATE_HZ = CLOCK_FREQ_HZ/100 // 1_000_000.0
+    // For realistic simulation at lower clock frequencies
+    // parameter real TARGET_SAMPLE_RATE_HZ = $min(1_000_000.0, CLOCK_FREQ_HZ)
 ) (
     input wire clk,
     input wire rst,
+
+    output reg sample_en,
+
+    // Dynamic Bit Precision Control (e.g., 16, 12, 10, 8)
+    input wire [4:0] bit_precision,
 
     // Dynamic Frequency Control (Q16.8 Hz format)
     input wire [23:0] center_freq,
@@ -32,9 +41,25 @@ module dds_top #(
 );
 
   // -------------------------------------------------------------------------
-  // Base Phase Increment Calculation (Uncorrupted by Jitter)
+  // Clock Divider & Base Phase Increment Calculation
   // -------------------------------------------------------------------------
-  localparam real SCALE_R = (16777216.0 / CLOCK_FREQ_HZ) * 65536.0;
+  localparam integer DIV_LIMIT = $rtoi(CLOCK_FREQ_HZ / TARGET_SAMPLE_RATE_HZ);
+  reg [31:0] clk_div_cnt;
+
+  always_ff @(posedge clk or posedge rst) begin
+    if (rst) begin
+      clk_div_cnt <= 32'd0;
+      sample_en   <= 1'b0;
+    end else if (clk_div_cnt >= DIV_LIMIT - 1) begin
+      clk_div_cnt <= 32'd0;
+      sample_en   <= 1'b1;
+    end else begin
+      clk_div_cnt <= clk_div_cnt + 1'b1;
+      sample_en   <= 1'b0;
+    end
+  end
+
+  localparam real SCALE_R = (16777216.0 / TARGET_SAMPLE_RATE_HZ) * 65536.0;
   localparam logic [31:0] FREQ_MULT = 32'($rtoi(SCALE_R));
 
   wire [55:0] m_base_full = 56'(center_freq) * 56'(FREQ_MULT);
@@ -42,11 +67,11 @@ module dds_top #(
 
   reg  [31:0] phase_acc;
 
-  // Ideal, un-jittered phase accumulator step guarantees 60.000 Hz center
+  // Ideal, un-jittered phase accumulator step guarantees 60.000 Hz center at 1 MSPS
   always_ff @(posedge clk or posedge rst) begin
     if (rst) begin
       phase_acc <= 32'd0;
-    end else begin
+    end else if (sample_en) begin
       phase_acc <= phase_acc + m_base;
     end
   end
@@ -62,10 +87,6 @@ module dds_top #(
       .rnd_out(rnd_word)
   );
 
-  // Attenuate LFSR output so jitter_depth maxes out at a manageable phase window
-  // Shift right by 4 base bits + (8 - jitter_depth)
-  // Depth 8 -> max +/-8 ROM steps (+/- 11.25 degrees)
-  // Depth 1 -> max +/-1 ROM step  (+/- 1.4 degrees)
   wire signed [7:0] phase_jitter = jitter_en ? ($signed(
       rnd_word[15:8]
   ) >>> (12 - jitter_depth)) : 8'sd0;
@@ -172,18 +193,24 @@ module dds_top #(
   wire signed [17:0] i_scaled = i_scaled_full >>> 15;
 
   // -------------------------------------------------------------------------
-  // Saturation Guard (Continuous Ternary Assignments)
+  // Saturation Guard
   // -------------------------------------------------------------------------
   wire [15:0] v_sat, i_sat;
   assign v_sat = (v_scaled > 32'sd32767)  ? 16'sd32767  :
-                      (v_scaled < -32'sd32768) ? -16'sd32768 :
-                      v_scaled[15:0];
+                 (v_scaled < -32'sd32768) ? -16'sd32768 :
+                 v_scaled[15:0];
 
   assign i_sat = (i_scaled > 32'sd32767)  ? 16'sd32767  :
-                      (i_scaled < -32'sd32768) ? -16'sd32768 :
-                      i_scaled[15:0];
+                 (i_scaled < -32'sd32768) ? -16'sd32768 :
+                 i_scaled[15:0];
 
-  assign v_out = v_sat;
-  assign i_out = i_sat;
+  // -------------------------------------------------------------------------
+  // Dynamic Bit Precision Masking (Zeroes lower 16 - bit_precision bits)
+  // -------------------------------------------------------------------------
+  wire [3:0]  shift_amt = (bit_precision < 5'd16) ? (5'd16 - bit_precision) : 4'd0;
+  wire [15:0] precision_mask = 16'hFFFF << shift_amt;
+
+  assign v_out = v_sat & precision_mask;
+  assign i_out = i_sat & precision_mask;
 
 endmodule

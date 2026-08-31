@@ -14,9 +14,10 @@ module system_top #(
     input logic rst_n,
 
     // DDS Signal Synthesizer Controls
-    input logic [23:0] center_freq,   // Frequency in Q16.8 format (e.g., 60 Hz = 24'd15360)
-    input logic [14:0] v_peak,        // Voltage magnitude scaling (Q0.15)
-    input logic [14:0] i_peak,        // Current magnitude scaling (Q0.15)
+    input logic [23:0] center_freq,    // Frequency in Q16.8 format (e.g., 60 Hz = 24'd15360)
+    input logic [ 4:0] bit_precision,
+    input logic [14:0] v_peak,         // Voltage magnitude scaling (Q0.15)
+    input logic [14:0] i_peak,         // Current magnitude scaling (Q0.15)
     input logic        jitter_en,
     input logic [ 3:0] jitter_depth,
     input logic [ 7:0] current_phase,
@@ -76,6 +77,7 @@ module system_top #(
       .clk          (clk),
       .rst          (dds_rst),
       .center_freq  (center_freq),
+      .bit_precision(bit_precision),
       .v_peak       (v_peak),
       .i_peak       (i_peak),
       .jitter_en    (jitter_en),
@@ -119,7 +121,7 @@ module system_top #(
   //    Generates 90-degree orthogonal current signals (i_alpha & i_beta)
   // -------------------------------------------------------------------------
   sogi_qsg #(
-      .CLOCK_FREQ_HZ (CLOCK_FREQ_HZ),
+      .CLOCK_FREQ_HZ(CLOCK_FREQ_HZ),
       .CENTER_FREQ_HZ(CENTER_FREQ_HZ),
       .ENABLE_FREQ_ADAPT(0)
   ) u_current_qsg (

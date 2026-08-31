@@ -5,7 +5,7 @@ module tb_system_top;
   // -------------------------------------------------------------------------
   // Timing & Frequency Parameters
   // -------------------------------------------------------------------------
-  localparam real SYSTEM_FREQ_HZ = 100_000.0;  // System clock frequency (1 MHz)
+  localparam real SYSTEM_FREQ_HZ = 1_000_000.0;  // System clock frequency (1 MHz)
   localparam real CENTER_FREQ_HZ = 60.0;  // Grid nominal frequency (60 Hz)
 
   // Derived Clock Half-Period in nanoseconds
@@ -28,6 +28,7 @@ module tb_system_top;
 
   // DDS Control Registers
   logic [23:0] center_freq;
+  logic [ 4:0] bit_precision;
   logic [14:0] v_peak;
   logic [14:0] i_peak;
   logic        jitter_en;
@@ -82,6 +83,7 @@ module tb_system_top;
       .clk          (clk),
       .rst_n        (rst_n),
       .center_freq  (center_freq),
+      .bit_precision(bit_precision),
       .v_peak       (v_peak),
       .i_peak       (i_peak),
       .jitter_en    (jitter_en),
@@ -206,6 +208,7 @@ module tb_system_top;
 
     // Default DDS Parameters
     center_freq   = to_q16_8(CENTER_FREQ_HZ);  // 60.0 Hz (24'd15360)
+    bit_precision = 5'd12;
     v_peak        = 15'h3FFF;  // 100% Peak (~16383)
     i_peak        = 15'h1FFF;  // ~50% Peak (~8191)
     jitter_en     = 0;

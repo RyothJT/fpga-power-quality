@@ -71,7 +71,7 @@ python3 run_sim.py tb_dds_top
  - [X] Integrate LFSR pseudo-random phase jitter injection (~lfsr_random.sv~).
  - [X] Add independent Q0.8 scaling for 3^{rd}, 5^{th}, and 7^{th} odd harmonics on Voltage (V).
  - [X] Add phase-aligned odd harmonic scaling for Current (I).
- - [ ] Upgrade simulation to use a 1 MSPS input and 12 bit ADC.
+ - [X] Upgrade simulation to use a 1 MSPS input and 12 bit ADC.
  - [ ] Verify full range fundamental phase offset control (\phi) between V and I for power factor sweep (0 \le \phi \le 360^\circ).
  - [ ] Implement overflow saturation flags (~v_clip~, ~i_clip~) for hardware monitoring.
  - [ ] Combine and parameterize sine ROMs for DDS and PLL.
