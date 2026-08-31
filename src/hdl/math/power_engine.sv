@@ -67,62 +67,73 @@ module power_engine #(
   // Round to nearest integer using 2^(K-1) rounding constant
   assign p_avg = 16'($signed(p_iir_acc + (1 << (K - 1))) >>> K);
   assign q_avg = 16'($signed(q_iir_acc + (1 << (K - 1))) >>> K);
+  // -------------------------------------------------------------------------
+  // 3. Squared Signal & Mean Square Accumulation
+  // -------------------------------------------------------------------------
+  logic [31:0] v_mag_sq, i_mag_sq;
 
-  // -------------------------------------------------------------------------
-  // 3. Squared Signal & Mean Square Accumulation (with Unbiased Rounding)
-  // -------------------------------------------------------------------------
-  logic signed [31:0] v_sq, i_sq;
-  logic [16+K-1:0] v_sq_acc, i_sq_acc;
+  // v_alpha^2 + v_beta^2 = Peak Amplitude Squared.
+  // We divide by 2 to get the Mean Square (MS) for a sine wave.
+  // Using 33 bits for the sum to prevent overflow before the shift
+  assign v_mag_sq = 32'((($signed(
+      v_alpha
+  ) * $signed(
+      v_alpha
+  )) + ($signed(
+      v_beta
+  ) * $signed(
+      v_beta
+  ))) >>> 1);
+
+  assign i_mag_sq = 32'((($signed(
+      i_alpha
+  ) * $signed(
+      i_alpha
+  )) + ($signed(
+      i_beta
+  ) * $signed(
+      i_beta
+  ))) >>> 1);
+
+  // Accumulators must be wide enough to hold 32 bits + K bits of filtering state
+  logic [32+K-1:0] v_sq_acc, i_sq_acc;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      v_sq     <= '0;
-      i_sq     <= '0;
       v_sq_acc <= '0;
       i_sq_acc <= '0;
     end else begin
-      v_sq <= $signed(v_alpha) * $signed(v_alpha);
-      i_sq <= $signed(i_alpha) * $signed(i_alpha);
-
-      v_sq_acc <= v_sq_acc + 16'(v_sq >> 16) - (v_sq_acc >> K);
-      i_sq_acc <= i_sq_acc + 16'(i_sq >> 16) - (i_sq_acc >> K);
+      // Standard IIR Filter: acc = acc + input - (acc >> K)
+      // No pre-shifting! Keep the full precision of the 32-bit square.
+      v_sq_acc <= v_sq_acc + v_mag_sq - (v_sq_acc >> K);
+      i_sq_acc <= i_sq_acc + i_mag_sq - (i_sq_acc >> K);
     end
   end
+
+  // Extract the filtered Mean Square (MS) value
+  wire [31:0] v_ms = (v_sq_acc + (1 << (K - 1))) >> K;
+  wire [31:0] i_ms = (i_sq_acc + (1 << (K - 1))) >> K;
 
   // -------------------------------------------------------------------------
   // 4. Square Root Core
   // -------------------------------------------------------------------------
-  function automatic logic [15:0] isqrt(input logic [31:0] val);
-    logic [31:0] a;
-    logic [15:0] q;
-    logic [33:0] right, r;
-    begin
-      a = val;
-      q = 0;
-      r = 0;
-      for (int i = 0; i < 16; i++) begin
-        r     = {r[31:0], a[31:30]};
-        a     = a << 2;
-        right = {q, 2'b01};
-        if (r >= right) begin
-          r = r - right;
-          q = {q[14:0], 1'b1};
-        end else begin
-          q = {q[14:0], 1'b0};
-        end
-      end
-      return q;
-    end
-  endfunction
+  // Input: 32-bit (Mean Square), Output: 16-bit (Root Mean Square)
+  isqrt #(
+      .WIDTH(32)
+  ) u_isqrt_v (
+      .clk(clk),
+      .rst_n(rst_n),
+      .val_in(v_ms),
+      .root_out(v_rms)
+  );
 
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      v_rms <= '0;
-      i_rms <= '0;
-    end else begin
-      v_rms <= isqrt({16'((v_sq_acc + (1 << (K - 1))) >> K), 16'b0});
-      i_rms <= isqrt({16'((i_sq_acc + (1 << (K - 1))) >> K), 16'b0});
-    end
-  end
+  isqrt #(
+      .WIDTH(32)
+  ) u_isqrt_i (
+      .clk(clk),
+      .rst_n(rst_n),
+      .val_in(i_ms),
+      .root_out(i_rms)
+  );
 
 endmodule
