@@ -66,39 +66,29 @@ python3 run_sim.py tb_dds_top
 * Phase 1 Execution Roadmap & TODOs
 
 ** Digital Signal Generation (Internal Grid Model)
-*** DONE Implement fundamental 60 Hz DDS sine wave lookup table (~dds_sine_rom.sv~).
-CLOSED: [2026-08-28 Fri 15:45]
-- State "DONE"       from "TODO"       [2026-08-28 Fri 15:45]
-*** DONE Add dynamic Q1.8 voltage sag scaling logic into ~dds_top.sv~.
-CLOSED: [2026-08-28 Fri 15:45]
-- State "DONE"       from "TODO"       [2026-08-28 Fri 15:45]
-*** DONE Integrate LFSR pseudo-random phase jitter injection (~lfsr_random.sv~).
-CLOSED: [2026-08-28 Fri 15:45]
-- State "DONE"       from "TODO"       [2026-08-28 Fri 15:45]
-*** DONE Add independent Q0.8 scaling for 3^{rd}, 5^{th}, and 7^{th} odd harmonics on Voltage (V).
-CLOSED: [2026-08-28 Fri 15:45]
-- State "DONE"       from "TODO"       [2026-08-28 Fri 15:45]
-*** DONE Add phase-aligned odd harmonic scaling for Current (I).
-CLOSED: [2026-08-28 Fri 15:45]
-- State "DONE"       from "TODO"       [2026-08-28 Fri 15:45]
-*** TODO Verify full range fundamental phase offset control (\phi) between V and I for power factor sweep (0 \le \phi \le 360^\circ).
-*** TODO Implement overflow saturation flags (~v_clip~, ~i_clip~) for hardware monitoring.
-*** TODO Combine and parameterize sine ROMs for DDS and PLL.
+ - [X] Implement fundamental 60 Hz DDS sine wave lookup table (~dds_sine_rom.sv~).
+ - [X] Add dynamic Q1.8 voltage sag scaling logic into ~dds_top.sv~.
+ - [X] Integrate LFSR pseudo-random phase jitter injection (~lfsr_random.sv~).
+ - [X] Add independent Q0.8 scaling for 3^{rd}, 5^{th}, and 7^{th} odd harmonics on Voltage (V).
+ - [X] Add phase-aligned odd harmonic scaling for Current (I).
+ - [ ] Upgrade simulation to use a 1 MSPS input and 12 bit ADC.
+ - [ ] Verify full range fundamental phase offset control (\phi) between V and I for power factor sweep (0 \le \phi \le 360^\circ).
+ - [ ] Implement overflow saturation flags (~v_clip~, ~i_clip~) for hardware monitoring.
+ - [ ] Combine and parameterize sine ROMs for DDS and PLL.
+
 
 ** Signal Conditioning & Sampling Interface
-*** TODO Instantiate and configure Xilinx XADC IP block for sampling dual analog inputs or streaming internal digital vectors.
-*** TODO Write XADC interface module (~xadc_interface.sv~) to convert raw XADC samples into 16-bit Q1.15 fixed-point V and I data buses.
+ - [ ] Instantiate and configure Xilinx XADC IP block for sampling dual analog inputs or streaming internal digital vectors.
+ - [ ] Write XADC interface module (~xadc_interface.sv~) to convert raw XADC samples into 16-bit Q1.15 fixed-point V and I data buses.
 
 ** Core Algorithmic Modules (HDL)
-*** DONE Implement PI Loop Filter (~sogi_pll_top.sv~) for continuous phase/frequency error tracking (57 Hz \le f \le 63 Hz).
-CLOSED: [2026-08-29 Sat 15:52]
-- State "DONE"       from "TODO"       [2026-08-29 Sat 15:52]
-*** TODO Implement ~power_engine.sv~ using fixed-point multipliers to compute Instantaneous Active Power (P = V \cdot I) and Reactive Power (Q).
-*** TODO Implement moving average / IIR filter for real-time V_{RMS} and I_{RMS} calculation.
-*** TODO Implement Total Harmonic Distortion (THD) estimator block (~thd_analyzer.sv~).
+ - [X] Implement PI Loop Filter (~sogi_pll_top.sv~) for continuous phase/frequency error tracking (57 Hz \le f \le 63 Hz).
+ - [X] Implement ~power_engine.sv~ using fixed-point multipliers to compute Instantaneous Active Power (P = V \cdot I) and Reactive Power (Q).
+ - [X] Implement moving average / IIR filter for real-time V_{RMS} and I_{RMS} calculation.
+ - [ ] Implement Total Harmonic Distortion (THD) estimator block (~thd_analyzer.sv~).
 
 ** Verification & Hardware Testing
-*** TODO Write Vivado testbenches validating PLL lock speed during transient sags and phase jumps.
-*** TODO Configure Xilinx Integrated Logic Analyzer (ILA) IP to monitor internal P, Q, and \theta signals live on Basys 3 hardware via USB.
+ - [ ] Write Vivado testbenches validating PLL lock speed during transient sags and phase jumps.
+ - [ ] Configure Xilinx Integrated Logic Analyzer (ILA) IP to monitor internal P, Q, and \theta signals live on Basys 3 hardware via USB.
 
 # End:
