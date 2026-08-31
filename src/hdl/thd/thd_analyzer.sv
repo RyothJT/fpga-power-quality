@@ -1,0 +1,105 @@
+`timescale 1ns / 1ps
+
+/**
+ * Module: thd_analyzer
+ * Description: Estimates THD by isolating harmonics in the time domain.
+ *              Filter strength (K) is dynamically calculated based on CLOCK_FREQ_HZ.
+ *              Outputs all high (16'ffff) when pll is unlocked.
+ */
+module thd_analyzer #(
+    parameter real CLOCK_FREQ_HZ = 100_000_000.0,
+    parameter real CUTOFF_FREQ_HZ = 10.0  // Aim for ~2Hz to heavily suppress 120Hz ripple
+) (
+    input logic clk,
+    input logic rst_n,
+
+    input logic signed [15:0] v_in,       // Raw Voltage (Q1.15)
+    input logic signed [15:0] v_alpha,    // Fundamental Sine (Q1.15)
+    input logic signed [15:0] v_beta,     // Fundamental Cosine (Q1.15)
+    input logic               pll_locked,
+
+    output logic [3:-12] thd_val  // THD in Q4.12 format
+);
+
+  // -------------------------------------------------------------------------
+  // 1. Dynamic Filter Parameter Calculation
+  // -------------------------------------------------------------------------
+  // Formula: 2^K = F_clk / (2 * pi * F_cutoff)
+  localparam real DIVISOR = CLOCK_FREQ_HZ / (2.0 * 3.14159265 * CUTOFF_FREQ_HZ);
+  localparam int K = $clog2($rtoi(DIVISOR));
+
+  // -------------------------------------------------------------------------
+  // 2. Time-Domain Harmonic Isolation
+  // -------------------------------------------------------------------------
+  // Subtract fundamental from raw signal before squaring.
+  // This drastically reduces the ripple magnitude entering the filter.
+  logic signed [15:0] v_harm_instant;
+  always_ff @(posedge clk) begin
+    v_harm_instant <= v_in - v_alpha;
+  end
+
+  // -------------------------------------------------------------------------
+  // 3. Power Accumulation (Mean Square)
+  // -------------------------------------------------------------------------
+  logic [31:0] p_harm_inst;
+  logic [31:0] p_fund_inst;
+
+  assign p_harm_inst = 32'($signed(v_harm_instant) * $signed(v_harm_instant));
+  assign p_fund_inst = 32'((($signed(
+      v_alpha
+  ) * $signed(
+      v_alpha
+  )) + ($signed(
+      v_beta
+  ) * $signed(
+      v_beta
+  ))) >>> 1);
+
+  // Accumulators scaled by dynamic K
+  logic [32+K-1:0] ms_harm_acc;
+  logic [32+K-1:0] ms_fund_acc;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      ms_harm_acc <= '0;
+      ms_fund_acc <= '0;
+    end else begin
+      ms_harm_acc <= ms_harm_acc + p_harm_inst - (ms_harm_acc >> K);
+      ms_fund_acc <= ms_fund_acc + p_fund_inst - (ms_fund_acc >> K);
+    end
+  end
+
+  wire  [31:0] ms_harm = ms_harm_acc >> K;
+  wire  [31:0] ms_fund = ms_fund_acc >> K;
+
+  // -------------------------------------------------------------------------
+  // 4. Ratio and Square Root (THD Calculation)
+  // -------------------------------------------------------------------------
+  logic [63:0] ratio_num;
+  logic [31:0] thd_sq_q24;
+  logic [-3:12] root_out;
+
+  assign ratio_num = (64'(ms_harm) << 24);
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      thd_sq_q24 <= '0;
+    end else if (pll_locked && ms_fund > 100) begin
+      thd_sq_q24 <= 32'(ratio_num / ms_fund);
+    end else begin
+      thd_sq_q24 <= '0;
+    end
+  end
+
+  isqrt #(
+      .WIDTH(32)
+  ) u_isqrt_thd (
+      .clk     (clk),
+      .rst_n   (rst_n),
+      .val_in  (thd_sq_q24),
+      .root_out(root_out)
+  );
+
+  assign thd_val = pll_locked ? root_out : '1;
+
+endmodule

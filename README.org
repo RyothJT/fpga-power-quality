@@ -85,7 +85,7 @@ python3 run_sim.py tb_dds_top
  - [X] Implement PI Loop Filter (~sogi_pll_top.sv~) for continuous phase/frequency error tracking (57 Hz \le f \le 63 Hz).
  - [X] Implement ~power_engine.sv~ using fixed-point multipliers to compute Instantaneous Active Power (P = V \cdot I) and Reactive Power (Q).
  - [X] Implement moving average / IIR filter for real-time V_{RMS} and I_{RMS} calculation.
- - [ ] Implement Total Harmonic Distortion (THD) estimator block (~thd_analyzer.sv~).
+ - [X] Implement Total Harmonic Distortion (THD) estimator block (~thd_analyzer.sv~).
 
 ** Verification & Hardware Testing
  - [ ] Write Vivado testbenches validating PLL lock speed during transient sags and phase jumps.
