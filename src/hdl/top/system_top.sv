@@ -60,7 +60,10 @@ module system_top #(
     output logic signed [15:0] p_avg,
     output logic signed [15:0] q_avg,
     output logic        [15:0] v_rms,
-    output logic        [15:0] i_rms
+    output logic        [15:0] i_rms,
+
+    // Total harmonic distortion metric
+   output logic         [3:-12] thd_val
 );
 
   // -------------------------------------------------------------------------
@@ -152,6 +155,21 @@ module system_top #(
       .q_avg  (q_avg),
       .v_rms  (v_rms),
       .i_rms  (i_rms)
+  );
+
+  // -------------------------------------------------------------------------
+  // 5. THD
+  // -------------------------------------------------------------------------
+  thd_analyzer #(
+      .CLOCK_FREQ_HZ (CLOCK_FREQ_HZ)
+  ) uut (
+      .clk       (clk),
+      .rst_n     (rst_n),
+      .v_in      (v_out),
+      .v_alpha   (v_alpha),
+      .v_beta    (v_beta),
+      .pll_locked(pll_locked),
+      .thd_val   (thd_val)
   );
 
 endmodule

@@ -5,7 +5,7 @@ module tb_system_top;
   // -------------------------------------------------------------------------
   // Timing & Frequency Parameters
   // -------------------------------------------------------------------------
-  localparam real SYSTEM_FREQ_HZ = 1_000_000.0;  // System clock frequency (1 MHz)
+  localparam real SYSTEM_FREQ_HZ = 100_000.0;  // System clock frequency (1 MHz)
   localparam real CENTER_FREQ_HZ = 60.0;  // Grid nominal frequency (60 Hz)
 
   // Derived Clock Half-Period in nanoseconds
@@ -69,6 +69,9 @@ module tb_system_top;
   wire         [ 15:0] v_rms;
   wire         [ 15:0] i_rms;
 
+  // Total harmonic distortion metric
+  wire         [ 3:-12] thd_val;
+
   // Self-Checking Verification Variables
   int                  error_count = 0;
   logic signed [ 15:0] max_vq_peak;
@@ -114,7 +117,8 @@ module tb_system_top;
       .p_avg        (p_avg),
       .q_avg        (q_avg),
       .v_rms        (v_rms),
-      .i_rms        (i_rms)
+      .i_rms        (i_rms),
+      .thd_val      (thd_val)
   );
 
   // Parameterized System Clock Generator
@@ -177,7 +181,7 @@ module tb_system_top;
     // 3. Validate Quadrature Voltage Error (v_q residual)
     if (max_vq_peak > vq_max_threshold) begin
       $display("[FAIL] %s: Peak quadrature phase error high! Peak |v_q| = %0d (Limit: %0d)",
-             step_name, max_vq_peak, vq_max_threshold);
+               step_name, max_vq_peak, vq_max_threshold);
       error_count++;
     end else begin
       $display("[PASS] %s: Peak quadrature error |v_q| = %0d (within limit %0d)", step_name,
@@ -188,12 +192,12 @@ module tb_system_top;
     if (check_power) begin
       if (v_rms == 0 || i_rms == 0) begin
         $display("[FAIL] %s: Power Engine RMS values unpopulated! v_rms = %0d, i_rms = %0d",
-               step_name, v_rms, i_rms);
+                 step_name, v_rms, i_rms);
         error_count++;
       end else begin
         $display(
-            "[PASS] %s: Power Engine telemetry verified (v_rms = %0d, i_rms = %0d, P_avg = %0d, Q_avg = %0d)",
-            step_name, v_rms, i_rms, p_avg, q_avg);
+            "[PASS] %s: Power Engine telemetry verified (v_rms = %0d, i_rms = %0d, P_avg = %0d, Q_avg = %0d, THD = %0.2f%%)",
+            step_name, v_rms, i_rms, p_avg, q_avg, (real'(thd_val) * 100.0 / 4096.0));
       end
     end
   endtask
