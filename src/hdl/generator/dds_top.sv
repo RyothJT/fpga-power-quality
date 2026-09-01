@@ -101,7 +101,7 @@ module dds_top #(
   // Address Generation
   // -------------------------------------------------------------------------
   wire [11:0] v_addr_h1 = phase_jittered;
-  wire [11:0] i_addr_h1 = phase_jittered + current_phase;
+  wire [11:0] i_addr_h1 = phase_jittered - {current_phase, 4'b0};
 
   wire [11:0] v_addr_h3 = v_addr_h1 * 12'd3;
   wire [11:0] v_addr_h5 = v_addr_h1 * 12'd5;

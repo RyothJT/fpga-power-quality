@@ -5,7 +5,7 @@ module tb_system_top;
   // -------------------------------------------------------------------------
   // Timing & Frequency Parameters
   // -------------------------------------------------------------------------
-  localparam real SYSTEM_FREQ_HZ = 100_000.0;  // System clock frequency (1 MHz)
+  localparam real SYSTEM_FREQ_HZ = 1_000_000.0;  // System clock frequency (1 MHz)
   localparam real CENTER_FREQ_HZ = 60.0;  // Grid nominal frequency (60 Hz)
 
   // Derived Clock Half-Period in nanoseconds
@@ -70,11 +70,11 @@ module tb_system_top;
   wire         [ 15:0] i_rms;
 
   // Total harmonic distortion metric
-  wire         [ 3:-12] thd_val, thd_12c;
+  wire [3:-12] thd_val, thd_12c;
 
   // Self-Checking Verification Variables
-  int                  error_count = 0;
-  logic signed [ 15:0] max_vq_peak;
+  int                 error_count = 0;
+  logic signed [15:0] max_vq_peak;
 
   // -------------------------------------------------------------------------
   // Device Under Test (DUT)
@@ -203,6 +203,40 @@ module tb_system_top;
     end
   endtask
 
+task automatic verify_phase_offset(input [7:0] phase_val);
+    realtime t_ref, t_v, t_i, delta_t;
+    real measured_phi, expected_phi;
+
+    current_phase = phase_val;
+    #(GRID_PERIOD_NS * 4.0); // Settle
+
+    // 1. Capture Voltage rising zero-crossing (Reference)
+    while (v_out >= 0) @(posedge clk);
+    while (v_out < 0) @(posedge clk);
+    t_v = $realtime;
+
+    // 2. Find the NEXT Current rising zero-crossing
+    // We wait for the voltage crossing, then look forward for the current.
+    // This defines "Lag".
+    while (i_out >= 0) @(posedge clk);
+    while (i_out < 0) @(posedge clk);
+    t_i = $realtime;
+
+    // 3. Calculate Lag
+    delta_t = t_i - t_v;
+
+    // Normalize delta_t to [0, Period)
+    // If delta_t is 17ms at 60Hz, it wraps to ~0.4ms
+    while (delta_t < 0)                delta_t += GRID_PERIOD_NS;
+    while (delta_t >= GRID_PERIOD_NS)  delta_t -= GRID_PERIOD_NS;
+
+    measured_phi = (delta_t / GRID_PERIOD_NS) * 360.0;
+    expected_phi = (real'(phase_val) / 256.0) * 360.0;
+
+    $display("[PHASE TEST] Input: %3d | Expected: %6.2f deg | Measured: %6.2f deg | Error: %6.2f deg",
+             phase_val, expected_phi, measured_phi, measured_phi - expected_phi);
+  endtask
+
   // -------------------------------------------------------------------------
   // Main Verification Sequence
   // -------------------------------------------------------------------------
@@ -215,7 +249,7 @@ module tb_system_top;
     center_freq   = to_q16_8(CENTER_FREQ_HZ);  // 60.0 Hz (24'd15360)
     bit_precision = 5'd12;
     v_peak        = 15'h3FFF;  // 100% Peak (~16383)
-    i_peak        = 15'h1FFF;  // ~50% Peak (~8191)
+    i_peak        = 15'h3FFF;
     jitter_en     = 0;
     jitter_depth  = 4'd4;
     current_phase = 8'd32;  // ~45-degree lag
@@ -285,6 +319,20 @@ module tb_system_top;
     v_h5_scale   = 8'd20;
     #(FINAL_SETTLE_TIME);
     check_system("Phase 5: Max Phase Jitter & Harmonics", 60.0, 1.2, 800);
+
+    // -----------------------------------------------------------------------
+    // Phase 6: Verify phase offset
+    // -----------------------------------------------------------------------
+    $display("\n--- Starting Phase Offset Sweep ---");
+    jitter_en    = 1'b0;
+    v_h3_scale   = 8'd0;
+    v_h5_scale   = 8'd0;
+    verify_phase_offset(8'd0);  // 0 degrees (Unity PF)
+    verify_phase_offset(8'd32);  // 45 degrees (Inductive)
+    verify_phase_offset(8'd64);  // 90 degrees (Pure Inductive)
+    verify_phase_offset(8'd128);  // 180 degrees (Inverted)
+    verify_phase_offset(8'd192);  // 270 degrees (Capacitive)
+    $display("--- Phase Offset Sweep Complete ---\n");
 
     // -----------------------------------------------------------------------
     // Verification Summary & Completion
