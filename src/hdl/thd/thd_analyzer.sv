@@ -8,10 +8,13 @@
  */
 module thd_analyzer #(
     parameter real CLOCK_FREQ_HZ = 100_000_000.0,
+    parameter real SAMPLE_RATE_HZ = CLOCK_FREQ_HZ/100,
     parameter real CUTOFF_FREQ_HZ = 10.0  // Aim for ~2Hz to heavily suppress 120Hz ripple
 ) (
     input logic clk,
     input logic rst_n,
+
+    input logic measure_en,
 
     input logic signed [15:0] v_in,       // Raw Voltage (Q1.15)
     input logic signed [15:0] v_alpha,    // Fundamental Sine (Q1.15)
@@ -25,7 +28,7 @@ module thd_analyzer #(
   // 1. Dynamic Filter Parameter Calculation
   // -------------------------------------------------------------------------
   // Formula: 2^K = F_clk / (2 * pi * F_cutoff)
-  localparam real DIVISOR = CLOCK_FREQ_HZ / (2.0 * 3.14159265 * CUTOFF_FREQ_HZ);
+  localparam real DIVISOR = SAMPLE_RATE_HZ / (2.0 * 3.14159265 * CUTOFF_FREQ_HZ);
   localparam int K = $clog2($rtoi(DIVISOR));
 
   // -------------------------------------------------------------------------
@@ -34,8 +37,11 @@ module thd_analyzer #(
   // Subtract fundamental from raw signal before squaring.
   // This drastically reduces the ripple magnitude entering the filter.
   logic signed [15:0] v_harm_instant;
-  always_ff @(posedge clk) begin
-    v_harm_instant <= v_in - v_alpha;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      v_harm_instant <= 16'd0; // <--- MANDATORY: Initialize to 0
+    end
+    else if (measure_en) v_harm_instant <= v_in - v_alpha;
   end
 
   // -------------------------------------------------------------------------
@@ -63,20 +69,20 @@ module thd_analyzer #(
     if (!rst_n) begin
       ms_harm_acc <= '0;
       ms_fund_acc <= '0;
-    end else begin
+    end else if (measure_en) begin
       ms_harm_acc <= ms_harm_acc + p_harm_inst - (ms_harm_acc >> K);
       ms_fund_acc <= ms_fund_acc + p_fund_inst - (ms_fund_acc >> K);
     end
   end
 
-  wire  [31:0] ms_harm = ms_harm_acc >> K;
-  wire  [31:0] ms_fund = ms_fund_acc >> K;
+  wire  [ 31:0] ms_harm = ms_harm_acc >> K;
+  wire  [ 31:0] ms_fund = ms_fund_acc >> K;
 
   // -------------------------------------------------------------------------
   // 4. Ratio and Square Root (THD Calculation)
   // -------------------------------------------------------------------------
-  logic [63:0] ratio_num;
-  logic [31:0] thd_sq_q24;
+  logic [ 63:0] ratio_num;
+  logic [ 31:0] thd_sq_q24;
   logic [-3:12] root_out;
 
   assign ratio_num = (64'(ms_harm) << 24);

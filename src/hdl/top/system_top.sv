@@ -63,13 +63,14 @@ module system_top #(
     output logic        [15:0] i_rms,
 
     // Total harmonic distortion metric
-   output logic         [3:-12] thd_val
+    output logic [3:-12] thd_val
 );
 
   // -------------------------------------------------------------------------
   // Reset Inversion for DDS Sub-module
   // -------------------------------------------------------------------------
   wire dds_rst = ~rst_n;
+  wire measure_en;
 
   // -------------------------------------------------------------------------
   // 1. Direct Digital Synthesizer (DDS) Core
@@ -79,6 +80,7 @@ module system_top #(
   ) u_dds (
       .clk          (clk),
       .rst          (dds_rst),
+      .measure_en   (measure_en),
       .center_freq  (center_freq),
       .bit_precision(bit_precision),
       .v_peak       (v_peak),
@@ -161,10 +163,11 @@ module system_top #(
   // 5. THD
   // -------------------------------------------------------------------------
   thd_analyzer #(
-      .CLOCK_FREQ_HZ (CLOCK_FREQ_HZ)
-  ) uut (
+      .CLOCK_FREQ_HZ(CLOCK_FREQ_HZ)
+  ) u_thd (
       .clk       (clk),
       .rst_n     (rst_n),
+      .measure_en (measure_en),
       .v_in      (v_out),
       .v_alpha   (v_alpha),
       .v_beta    (v_beta),

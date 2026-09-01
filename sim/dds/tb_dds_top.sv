@@ -29,6 +29,7 @@ module tb_dds_top;
   wire [15:0] v_out;
   wire [15:0] i_out;
   wire        sample_en;
+  wire        measure_en;
 
   // Instantiate DDS Module
   dds_top #(
@@ -38,6 +39,7 @@ module tb_dds_top;
       .clk(clk),
       .rst(rst),
       .sample_en(sample_en),
+      .measure_en(measure_en),
       .bit_precision(bit_precision),
       .center_freq(center_freq),
       .v_peak(v_peak),

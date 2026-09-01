@@ -24,24 +24,26 @@ module tb_thd_analyzer;
   logic rst_n = 0;
   logic signed [15:0] v_in;
   logic signed [15:0] v_alpha, v_beta;
-  logic        pll_locked;
+  logic         pll_locked;
   logic [3:-12] thd_val;
 
   // Math variables for stimulus
-  real         phase_acc = 0.0;
-  real         phase_inc = (2.0 * 3.1415926535 * GRID_FREQ_HZ) / CLOCK_FREQ_HZ;
-  real         amp_fund = 20000.0;
-  real         amp_harm = 0.0;
+  real          phase_acc = 0.0;
+  real          phase_inc = (2.0 * 3.1415926535 * GRID_FREQ_HZ) / CLOCK_FREQ_HZ;
+  real          amp_fund = 20000.0;
+  real          amp_harm = 0.0;
 
   // -------------------------------------------------------------------------
   // Component Instantiation
   // -------------------------------------------------------------------------
   thd_analyzer #(
       .CLOCK_FREQ_HZ (CLOCK_FREQ_HZ),
+      .SAMPLE_RATE_HZ(CLOCK_FREQ_HZ),
       .CUTOFF_FREQ_HZ(CUTOFF_FREQ_HZ)
   ) uut (
       .clk       (clk),
       .rst_n     (rst_n),
+      .measure_en('1),
       .v_in      (v_in),
       .v_alpha   (v_alpha),
       .v_beta    (v_beta),

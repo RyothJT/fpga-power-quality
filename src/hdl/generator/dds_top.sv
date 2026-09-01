@@ -1,10 +1,10 @@
 `timescale 1ns / 1ps
 
 module dds_top #(
-    parameter      PHASE_ACC_WIDTH = 32,
-    parameter real CLOCK_FREQ_HZ = 100_000_000.0,
+    parameter      PHASE_ACC_WIDTH       = 32,
+    parameter real CLOCK_FREQ_HZ         = 100_000_000.0,
     // Consistently divide by 100 to match real world conditions with faster simulation
-    parameter real TARGET_SAMPLE_RATE_HZ = CLOCK_FREQ_HZ/100 // 1_000_000.0
+    parameter real TARGET_SAMPLE_RATE_HZ = CLOCK_FREQ_HZ / 100  // 1_000_000.0
     // For realistic simulation at lower clock frequencies
     // parameter real TARGET_SAMPLE_RATE_HZ = $min(1_000_000.0, CLOCK_FREQ_HZ)
 ) (
@@ -12,6 +12,7 @@ module dds_top #(
     input wire rst,
 
     output reg sample_en,
+    output reg measure_en,
 
     // Dynamic Bit Precision Control (e.g., 16, 12, 10, 8)
     input wire [4:0] bit_precision,
@@ -50,12 +51,15 @@ module dds_top #(
     if (rst) begin
       clk_div_cnt <= 32'd0;
       sample_en   <= 1'b0;
-    end else if (clk_div_cnt >= DIV_LIMIT - 1) begin
-      clk_div_cnt <= 32'd0;
-      sample_en   <= 1'b1;
+      measure_en  <= 1'b0;
     end else begin
-      clk_div_cnt <= clk_div_cnt + 1'b1;
-      sample_en   <= 1'b0;
+      // Existing sample_en logic (Leading Edge)
+      sample_en  <= (clk_div_cnt == DIV_LIMIT - 1);
+      // New measure_en logic (Midpoint)
+      // This aligns the continuous SOGI fundamental with the center of the DDS step
+      measure_en <= (clk_div_cnt == (DIV_LIMIT >> 1));
+      if (clk_div_cnt >= DIV_LIMIT - 1) clk_div_cnt <= 32'd0;
+      else clk_div_cnt <= clk_div_cnt + 1'b1;
     end
   end
 
@@ -207,7 +211,7 @@ module dds_top #(
   // -------------------------------------------------------------------------
   // Dynamic Bit Precision Masking (Zeroes lower 16 - bit_precision bits)
   // -------------------------------------------------------------------------
-  wire [3:0]  shift_amt = (bit_precision < 5'd16) ? (5'd16 - bit_precision) : 4'd0;
+  wire [ 3:0] shift_amt = (bit_precision < 5'd16) ? (5'd16 - bit_precision) : 4'd0;
   wire [15:0] precision_mask = 16'hFFFF << shift_amt;
 
   assign v_out = v_sat & precision_mask;
