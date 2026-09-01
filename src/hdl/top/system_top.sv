@@ -63,7 +63,8 @@ module system_top #(
     output logic        [15:0] i_rms,
 
     // Total harmonic distortion metric
-    output logic [3:-12] thd_val
+    output logic [3:-12] thd_val,
+    output logic [3:-12] thd_12c
 );
 
   // -------------------------------------------------------------------------
@@ -172,7 +173,8 @@ module system_top #(
       .v_alpha   (v_alpha),
       .v_beta    (v_beta),
       .pll_locked(pll_locked),
-      .thd_val   (thd_val)
+      .thd_val   (thd_val),
+      .thd_12c   (thd_12c)
   );
 
 endmodule

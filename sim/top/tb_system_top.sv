@@ -70,7 +70,7 @@ module tb_system_top;
   wire         [ 15:0] i_rms;
 
   // Total harmonic distortion metric
-  wire         [ 3:-12] thd_val;
+  wire         [ 3:-12] thd_val, thd_12c;
 
   // Self-Checking Verification Variables
   int                  error_count = 0;
@@ -118,7 +118,8 @@ module tb_system_top;
       .q_avg        (q_avg),
       .v_rms        (v_rms),
       .i_rms        (i_rms),
-      .thd_val      (thd_val)
+      .thd_val      (thd_val),
+      .thd_12c      (thd_12c)
   );
 
   // Parameterized System Clock Generator

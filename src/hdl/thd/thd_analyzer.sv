@@ -8,7 +8,7 @@
  */
 module thd_analyzer #(
     parameter real CLOCK_FREQ_HZ = 100_000_000.0,
-    parameter real SAMPLE_RATE_HZ = CLOCK_FREQ_HZ/100,
+    parameter real SAMPLE_RATE_HZ = CLOCK_FREQ_HZ / 100,
     parameter real CUTOFF_FREQ_HZ = 10.0  // Aim for ~2Hz to heavily suppress 120Hz ripple
 ) (
     input logic clk,
@@ -21,7 +21,8 @@ module thd_analyzer #(
     input logic signed [15:0] v_beta,     // Fundamental Cosine (Q1.15)
     input logic               pll_locked,
 
-    output logic [3:-12] thd_val  // THD in Q4.12 format
+    output logic [3:-12] thd_val,  // THD in Q4.12 format
+    output logic [3:-12] thd_12c   // THD averaged over 12 cycles per IEC 61000-4-30 standard
 );
 
   // -------------------------------------------------------------------------
@@ -39,9 +40,8 @@ module thd_analyzer #(
   logic signed [15:0] v_harm_instant;
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      v_harm_instant <= 16'd0; // <--- MANDATORY: Initialize to 0
-    end
-    else if (measure_en) v_harm_instant <= v_in - v_alpha;
+      v_harm_instant <= 16'd0;  // <--- MANDATORY: Initialize to 0
+    end else if (measure_en) v_harm_instant <= v_in - v_alpha;
   end
 
   // -------------------------------------------------------------------------
@@ -107,5 +107,56 @@ module thd_analyzer #(
   );
 
   assign thd_val = pll_locked ? root_out : '1;
+
+  // -------------------------------------------------------------------------
+  // 5. IEC 61000-4-30 12-Cycle Averaging (200ms Window)
+  // -------------------------------------------------------------------------
+  logic signed [15:0] v_alpha_prev;
+  logic               cycle_start;
+  logic        [ 3:0] cycle_cnt;
+  logic        [19:0] window_sample_cnt;
+  logic        [35:0] thd_accumulator;
+
+  // Detect positive-going zero crossing of fundamental sine (v_alpha)
+  assign cycle_start = (v_alpha_prev < 0 && v_alpha >= 0);
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      v_alpha_prev      <= 16'd0;
+      cycle_cnt         <= 4'd0;
+      window_sample_cnt <= 20'd0;
+      thd_accumulator   <= 36'd0;
+      thd_12c           <= '1;
+    end else if (measure_en) begin
+      v_alpha_prev <= v_alpha;
+
+      if (!pll_locked) begin
+        cycle_cnt         <= 4'd0;
+        window_sample_cnt <= 20'd0;
+        thd_accumulator   <= 36'd0;
+        thd_12c           <= '1;
+      end else begin
+        // Accumulate instantaneous THD and count samples
+        thd_accumulator   <= thd_accumulator + root_out;
+        window_sample_cnt <= window_sample_cnt + 1'b1;
+
+        if (cycle_start) begin
+          if (cycle_cnt >= 11) begin
+            // 12 Cycles reached: Calculate Mean and Reset
+            // Division by window_sample_cnt (approx 200,000 at 1MSPS)
+            if (window_sample_cnt > 0) begin
+              thd_12c <= 16'(thd_accumulator / window_sample_cnt);
+            end
+
+            thd_accumulator   <= 36'd0;
+            window_sample_cnt <= 20'd0;
+            cycle_cnt         <= 4'd0;
+          end else begin
+            cycle_cnt <= cycle_cnt + 1'b1;
+          end
+        end
+      end
+    end
+  end
 
 endmodule
