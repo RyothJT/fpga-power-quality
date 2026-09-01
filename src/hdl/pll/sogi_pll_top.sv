@@ -64,11 +64,14 @@ module sogi_pll_top #(
   logic [31:0] phase_acc;
   logic signed [15:0] sin_val, cos_val;
 
-  sogi_sine_rom u_rom (
-      .clk       (clk),
-      .phase_addr(phase_acc[31:20]),
-      .sin_val   (sin_val),
-      .cos_val   (cos_val)
+  sine_rom #(
+      .ADDR_WIDTH(12),
+      .AMPLITUDE (16383.0)  // SOGI baseline (Q1.14)
+  ) u_pll_rom (
+      .clk(clk),
+      .addr(phase_acc[31:20]),
+      .sin_out(sin_val),
+      .cos_out(cos_val)
   );
 
   logic signed [15:0] v_alpha_d1, v_beta_d1;

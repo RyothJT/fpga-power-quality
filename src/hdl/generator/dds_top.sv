@@ -91,26 +91,25 @@ module dds_top #(
       .rnd_out(rnd_word)
   );
 
-  wire signed [7:0] phase_jitter = jitter_en ? ($signed(
-      rnd_word[15:8]
-  ) >>> (12 - jitter_depth)) : 8'sd0;
+  wire signed [11:0] phase_jitter = jitter_en ? ($signed(
+      rnd_word
+  ) >>> (16 - jitter_depth)) : 12'sd0;
 
-  // Add phase noise directly to ROM address bus
-  wire [7:0] phase_jittered = phase_acc[31:24] + $unsigned(phase_jitter);
+  wire [11:0] phase_jittered = phase_acc[31:20] + $unsigned(phase_jitter);
 
   // -------------------------------------------------------------------------
   // Address Generation
   // -------------------------------------------------------------------------
-  wire [7:0] v_addr_h1 = phase_jittered;
-  wire [7:0] i_addr_h1 = phase_jittered + current_phase;
+  wire [11:0] v_addr_h1 = phase_jittered;
+  wire [11:0] i_addr_h1 = phase_jittered + current_phase;
 
-  wire [7:0] v_addr_h3 = v_addr_h1 * 8'd3;
-  wire [7:0] v_addr_h5 = v_addr_h1 * 8'd5;
-  wire [7:0] v_addr_h7 = v_addr_h1 * 8'd7;
+  wire [11:0] v_addr_h3 = v_addr_h1 * 12'd3;
+  wire [11:0] v_addr_h5 = v_addr_h1 * 12'd5;
+  wire [11:0] v_addr_h7 = v_addr_h1 * 12'd7;
 
-  wire [7:0] i_addr_h3 = i_addr_h1 * 8'd3;
-  wire [7:0] i_addr_h5 = i_addr_h1 * 8'd5;
-  wire [7:0] i_addr_h7 = i_addr_h1 * 8'd7;
+  wire [11:0] i_addr_h3 = i_addr_h1 * 12'd3;
+  wire [11:0] i_addr_h5 = i_addr_h1 * 12'd5;
+  wire [11:0] i_addr_h7 = i_addr_h1 * 12'd7;
 
   // -------------------------------------------------------------------------
   // ROM Lookups
@@ -118,46 +117,80 @@ module dds_top #(
   wire signed [15:0] raw_v_h1, raw_v_h3, raw_v_h5, raw_v_h7;
   wire signed [15:0] raw_i_h1, raw_i_h3, raw_i_h5, raw_i_h7;
 
-  dds_sine_rom u_rom_v_h1 (
+  // Voltage Harmonic ROMs
+  sine_rom #(
+      .ADDR_WIDTH(12),
+      .AMPLITUDE (32767.0)
+  ) u_rom_v_h1 (
       .clk(clk),
       .addr(v_addr_h1),
-      .sine_out(raw_v_h1)
+      .sin_out(raw_v_h1),
+      .cos_out()
   );
-  dds_sine_rom u_rom_v_h3 (
+  sine_rom #(
+      .ADDR_WIDTH(12),
+      .AMPLITUDE (32767.0)
+  ) u_rom_v_h3 (
       .clk(clk),
       .addr(v_addr_h3),
-      .sine_out(raw_v_h3)
+      .sin_out(raw_v_h3),
+      .cos_out()
   );
-  dds_sine_rom u_rom_v_h5 (
+  sine_rom #(
+      .ADDR_WIDTH(12),
+      .AMPLITUDE (32767.0)
+  ) u_rom_v_h5 (
       .clk(clk),
       .addr(v_addr_h5),
-      .sine_out(raw_v_h5)
+      .sin_out(raw_v_h5),
+      .cos_out()
   );
-  dds_sine_rom u_rom_v_h7 (
+  sine_rom #(
+      .ADDR_WIDTH(12),
+      .AMPLITUDE (32767.0)
+  ) u_rom_v_h7 (
       .clk(clk),
       .addr(v_addr_h7),
-      .sine_out(raw_v_h7)
+      .sin_out(raw_v_h7),
+      .cos_out()
   );
 
-  dds_sine_rom u_rom_i_h1 (
+  // Current Harmonic ROMs
+  sine_rom #(
+      .ADDR_WIDTH(12),
+      .AMPLITUDE (32767.0)
+  ) u_rom_i_h1 (
       .clk(clk),
       .addr(i_addr_h1),
-      .sine_out(raw_i_h1)
+      .sin_out(raw_i_h1),
+      .cos_out()
   );
-  dds_sine_rom u_rom_i_h3 (
+  sine_rom #(
+      .ADDR_WIDTH(12),
+      .AMPLITUDE (32767.0)
+  ) u_rom_i_h3 (
       .clk(clk),
       .addr(i_addr_h3),
-      .sine_out(raw_i_h3)
+      .sin_out(raw_i_h3),
+      .cos_out()
   );
-  dds_sine_rom u_rom_i_h5 (
+  sine_rom #(
+      .ADDR_WIDTH(12),
+      .AMPLITUDE (32767.0)
+  ) u_rom_i_h5 (
       .clk(clk),
       .addr(i_addr_h5),
-      .sine_out(raw_i_h5)
+      .sin_out(raw_i_h5),
+      .cos_out()
   );
-  dds_sine_rom u_rom_i_h7 (
+  sine_rom #(
+      .ADDR_WIDTH(12),
+      .AMPLITUDE (32767.0)
+  ) u_rom_i_h7 (
       .clk(clk),
       .addr(i_addr_h7),
-      .sine_out(raw_i_h7)
+      .sin_out(raw_i_h7),
+      .cos_out()
   );
 
   // -------------------------------------------------------------------------

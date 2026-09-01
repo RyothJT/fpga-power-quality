@@ -66,7 +66,7 @@ python3 run_sim.py tb_dds_top
 * Phase 1 Execution Roadmap & TODOs
 
 ** Digital Signal Generation (Internal Grid Model)
- - [X] Implement fundamental 60 Hz DDS sine wave lookup table (~dds_sine_rom.sv~).
+ - [X] Implement fundamental 60 Hz DDS sine wave lookup table (~sine_rom.sv~).
  - [X] Add dynamic Q1.8 voltage sag scaling logic into ~dds_top.sv~.
  - [X] Integrate LFSR pseudo-random phase jitter injection (~lfsr_random.sv~).
  - [X] Add independent Q0.8 scaling for 3^{rd}, 5^{th}, and 7^{th} odd harmonics on Voltage (V).
@@ -74,7 +74,7 @@ python3 run_sim.py tb_dds_top
  - [X] Upgrade simulation to use a 1 MSPS input and 12 bit ADC.
  - [ ] Verify full range fundamental phase offset control (\phi) between V and I for power factor sweep (0 \le \phi \le 360^\circ).
  - [ ] Implement overflow saturation flags (~v_clip~, ~i_clip~) for hardware monitoring.
- - [ ] Combine and parameterize sine ROMs for DDS and PLL.
+ - [X] Combine and parameterize sine ROMs for DDS and PLL.
 
 
 ** Signal Conditioning & Sampling Interface
