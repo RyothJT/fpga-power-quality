@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 
 module power_engine #(
-    parameter real CLOCK_FREQ_HZ  = 1_000_000.0,
+    parameter real CLOCK_FREQ_HZ  = 100_000_000.0,
     parameter real CENTER_FREQ_HZ = 60.0,
     parameter real CUTOFF_FREQ_HZ = 5.0
 ) (

@@ -100,21 +100,24 @@ module system_top #(
   );
 
   // -------------------------------------------------------------------------
-  // 2. Voltage Phase-Locked Loop (SOGI-PLL)
-  //    (Instantiates internal SOGI-QSG to produce v_alpha & v_beta)
+  // 2. Grid Frontend (Vectorization Layer)
+  //    Handles SOGI-PLL for Voltage and Frequency-Slaved QSG for Current.
   // -------------------------------------------------------------------------
-  sogi_pll_top #(
+  grid_frontend #(
       .CLOCK_FREQ_HZ (CLOCK_FREQ_HZ),
       .CENTER_FREQ_HZ(CENTER_FREQ_HZ)
-  ) u_pll (
+  ) u_frontend (
       .clk       (clk),
       .rst_n     (rst_n),
       .v_in      (v_out),
+      .i_in      (i_out),
       .k_sogi    (k_sogi),
       .kp_pll    (kp_pll),
       .ki_pll    (ki_pll),
       .v_alpha   (v_alpha),
       .v_beta    (v_beta),
+      .i_alpha   (i_alpha),
+      .i_beta    (i_beta),
       .v_d       (v_d),
       .v_q       (v_q),
       .theta     (theta),
@@ -123,24 +126,7 @@ module system_top #(
   );
 
   // -------------------------------------------------------------------------
-  // 3. Current SOGI-QSG
-  //    Generates 90-degree orthogonal current signals (i_alpha & i_beta)
-  // -------------------------------------------------------------------------
-  sogi_qsg #(
-      .CLOCK_FREQ_HZ(CLOCK_FREQ_HZ),
-      .CENTER_FREQ_HZ(CENTER_FREQ_HZ),
-      .ENABLE_FREQ_ADAPT(0)
-  ) u_current_qsg (
-      .clk    (clk),
-      .rst_n  (rst_n),
-      .u_in   (i_out),
-      .k_sogi (k_sogi),
-      .u_alpha(i_alpha),
-      .u_beta (i_beta)
-  );
-
-  // -------------------------------------------------------------------------
-  // 4. Power & RMS Metrics Engine
+  // 3. Power & RMS Metrics Engine
   // -------------------------------------------------------------------------
   power_engine #(
       .CLOCK_FREQ_HZ (CLOCK_FREQ_HZ),
@@ -161,14 +147,14 @@ module system_top #(
   );
 
   // -------------------------------------------------------------------------
-  // 5. THD
+  // 4. THD
   // -------------------------------------------------------------------------
   thd_analyzer #(
       .CLOCK_FREQ_HZ(CLOCK_FREQ_HZ)
   ) u_thd (
       .clk       (clk),
       .rst_n     (rst_n),
-      .measure_en (measure_en),
+      .measure_en(measure_en),
       .v_in      (v_out),
       .v_alpha   (v_alpha),
       .v_beta    (v_beta),

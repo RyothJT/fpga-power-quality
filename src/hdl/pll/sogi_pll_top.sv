@@ -22,6 +22,7 @@ module sogi_pll_top #(
     output logic signed [ 15:0] v_q,
     output logic        [ 15:0] theta,
     output logic        [15:-8] freq_out,
+    output logic        [ 31:0] phase_inc_smoothed,
 
     output logic pll_locked
 );
@@ -40,7 +41,6 @@ module sogi_pll_top #(
   localparam logic [31:0] MAX_PERIOD_CLKS = 32'($rtoi(NOMINAL_PERIOD_CLKS * 1.15));
 
   logic [31:0] phase_inc;
-  logic [31:0] phase_inc_smoothed;
 
   // -------------------------------------------------------------------------
   // 1. SOGI-QSG Sub-module Instance (Generates v_alpha & v_beta)
