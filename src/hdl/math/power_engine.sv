@@ -28,23 +28,27 @@ module power_engine #(
   // -------------------------------------------------------------------------
   // 1. Instantaneous Power Multiplications
   // -------------------------------------------------------------------------
-  logic signed [31:0] p_mult_raw;
+  logic signed [31:0] p_prod_a, p_prod_b;
+  logic signed [31:0] q_prod_a, q_prod_b;
   logic signed [31:0] q_mult_a, q_mult_b;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      p_mult_raw <= '0;
-      q_mult_a   <= '0;
-      q_mult_b   <= '0;
-      p_inst     <= '0;
-      q_inst     <= '0;
+      p_prod_a <= '0;
+      p_prod_b <= '0;
+      q_prod_a <= '0;
+      q_prod_b <= '0;
+      p_inst   <= '0;
+      q_inst   <= '0;
     end else begin
-      p_mult_raw <= $signed(v_alpha) * $signed(i_alpha);
-      q_mult_a   <= $signed(v_beta) * $signed(i_alpha);
-      q_mult_b   <= $signed(v_alpha) * $signed(i_beta);
+      p_prod_a <= $signed(v_alpha) * $signed(i_alpha);
+      p_prod_b <= $signed(v_beta) * $signed(i_beta);
 
-      p_inst     <= 16'(p_mult_raw >>> 15);
-      q_inst     <= 16'(($signed(q_mult_a) - $signed(q_mult_b)) >>> 15);
+      q_prod_a <= $signed(v_beta) * $signed(i_alpha);
+      q_prod_b <= $signed(v_alpha) * $signed(i_beta);
+
+      p_inst   <= 16'(($signed(p_prod_a) + $signed(p_prod_b)) >>> 16);
+      q_inst   <= 16'(($signed(q_prod_a) - $signed(q_prod_b)) >>> 16);
     end
   end
 
