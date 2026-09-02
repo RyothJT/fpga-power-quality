@@ -5,7 +5,7 @@ module tb_system_top;
   // -------------------------------------------------------------------------
   // Timing & Frequency Parameters
   // -------------------------------------------------------------------------
-  localparam real SYSTEM_FREQ_HZ = 1_000_000.0;  // System clock frequency (1 MHz)
+  localparam real SYSTEM_FREQ_HZ = 100_000.0;  // System clock frequency (1 MHz)
   localparam real CENTER_FREQ_HZ = 60.0;  // Grid nominal frequency (60 Hz)
 
   // Derived Clock Half-Period in nanoseconds
@@ -83,43 +83,7 @@ module tb_system_top;
       .CLOCK_FREQ_HZ (SYSTEM_FREQ_HZ),
       .CENTER_FREQ_HZ(CENTER_FREQ_HZ)
   ) uut (
-      .clk          (clk),
-      .rst_n        (rst_n),
-      .center_freq  (center_freq),
-      .bit_precision(bit_precision),
-      .v_peak       (v_peak),
-      .i_peak       (i_peak),
-      .jitter_en    (jitter_en),
-      .jitter_depth (jitter_depth),
-      .current_phase(current_phase),
-      .v_h3_scale   (v_h3_scale),
-      .v_h5_scale   (v_h5_scale),
-      .v_h7_scale   (v_h7_scale),
-      .i_h3_scale   (i_h3_scale),
-      .i_h5_scale   (i_h5_scale),
-      .i_h7_scale   (i_h7_scale),
-      .k_sogi       (k_sogi),
-      .kp_pll       (kp_pll),
-      .ki_pll       (ki_pll),
-      .v_out        (v_out),
-      .i_out        (i_out),
-      .v_alpha      (v_alpha),
-      .v_beta       (v_beta),
-      .v_d          (v_d),
-      .v_q          (v_q),
-      .theta        (theta),
-      .freq_out     (freq_out),
-      .pll_locked   (pll_locked),
-      .i_alpha      (i_alpha),
-      .i_beta       (i_beta),
-      .p_inst       (p_inst),
-      .q_inst       (q_inst),
-      .p_avg        (p_avg),
-      .q_avg        (q_avg),
-      .v_rms        (v_rms),
-      .i_rms        (i_rms),
-      .thd_val      (thd_val),
-      .thd_12c      (thd_12c)
+      .*
   );
 
   // Parameterized System Clock Generator
@@ -203,12 +167,12 @@ module tb_system_top;
     end
   endtask
 
-task automatic verify_phase_offset(input [7:0] phase_val);
+  task automatic verify_phase_offset(input [7:0] phase_val);
     realtime t_ref, t_v, t_i, delta_t;
     real measured_phi, expected_phi;
 
     current_phase = phase_val;
-    #(GRID_PERIOD_NS * 4.0); // Settle
+    #(GRID_PERIOD_NS * 4.0);  // Settle
 
     // 1. Capture Voltage rising zero-crossing (Reference)
     while (v_out >= 0) @(posedge clk);
@@ -227,14 +191,15 @@ task automatic verify_phase_offset(input [7:0] phase_val);
 
     // Normalize delta_t to [0, Period)
     // If delta_t is 17ms at 60Hz, it wraps to ~0.4ms
-    while (delta_t < 0)                delta_t += GRID_PERIOD_NS;
-    while (delta_t >= GRID_PERIOD_NS)  delta_t -= GRID_PERIOD_NS;
+    while (delta_t < 0) delta_t += GRID_PERIOD_NS;
+    while (delta_t >= GRID_PERIOD_NS) delta_t -= GRID_PERIOD_NS;
 
     measured_phi = (delta_t / GRID_PERIOD_NS) * 360.0;
     expected_phi = (real'(phase_val) / 256.0) * 360.0;
 
-    $display("[PHASE TEST] Input: %3d | Expected: %6.2f deg | Measured: %6.2f deg | Error: %6.2f deg",
-             phase_val, expected_phi, measured_phi, measured_phi - expected_phi);
+    $display(
+        "[PHASE TEST] Input: %3d | Expected: %6.2f deg | Measured: %6.2f deg | Error: %6.2f deg",
+        phase_val, expected_phi, measured_phi, measured_phi - expected_phi);
   endtask
 
   // -------------------------------------------------------------------------
@@ -324,9 +289,9 @@ task automatic verify_phase_offset(input [7:0] phase_val);
     // Phase 6: Verify phase offset
     // -----------------------------------------------------------------------
     $display("\n--- Starting Phase Offset Sweep ---");
-    jitter_en    = 1'b0;
-    v_h3_scale   = 8'd0;
-    v_h5_scale   = 8'd0;
+    jitter_en  = 1'b0;
+    v_h3_scale = 8'd0;
+    v_h5_scale = 8'd0;
     verify_phase_offset(8'd0);  // 0 degrees (Unity PF)
     verify_phase_offset(8'd32);  // 45 degrees (Inductive)
     verify_phase_offset(8'd64);  // 90 degrees (Pure Inductive)

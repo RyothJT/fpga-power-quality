@@ -126,13 +126,40 @@ module sogi_qsg #(
     w0_dt_ext   = 64'(w0_dt_dynamic);
   end
 
+// Inside sogi_qsg.sv
+
+  logic signed [47:0] next_alpha_acc, next_beta_acc;
+  localparam logic signed [47:0] POS_LIMIT = 48'h7FFF_FFFF_FFFF;
+  localparam logic signed [47:0] NEG_LIMIT = 48'h8000_0000_0000;
+
+  always_comb begin
+    // Calculate the next raw states
+    next_alpha_acc = alpha_acc + 48'($signed(d_alpha_ext * w0_dt_ext));
+    next_beta_acc  = beta_acc  + 48'($signed(d_beta_ext * w0_dt_ext));
+  end
+
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       alpha_acc <= '0;
       beta_acc  <= '0;
     end else begin
-      alpha_acc <= alpha_acc + 48'(d_alpha_ext * w0_dt_ext);
-      beta_acc  <= beta_acc + 48'(d_beta_ext * w0_dt_ext);
+      // Apply Saturation to Alpha Integrator
+      if (($signed(alpha_acc) > 0) && ($signed(d_alpha_ext * w0_dt_ext) > 0) && (next_alpha_acc < 0)) begin
+          alpha_acc <= POS_LIMIT; // Positive Overflow
+      end else if (($signed(alpha_acc) < 0) && ($signed(d_alpha_ext * w0_dt_ext) < 0) && (next_alpha_acc >= 0)) begin
+          alpha_acc <= NEG_LIMIT; // Negative Overflow
+      end else begin
+          alpha_acc <= next_alpha_acc;
+      end
+
+      // Apply Saturation to Beta Integrator
+      if (($signed(beta_acc) > 0) && ($signed(d_beta_ext * w0_dt_ext) > 0) && (next_beta_acc < 0)) begin
+          beta_acc <= POS_LIMIT; // Positive Overflow
+      end else if (($signed(beta_acc) < 0) && ($signed(d_beta_ext * w0_dt_ext) < 0) && (next_beta_acc >= 0)) begin
+          beta_acc <= NEG_LIMIT; // Negative Overflow
+      end else begin
+          beta_acc <= next_beta_acc;
+      end
     end
   end
 

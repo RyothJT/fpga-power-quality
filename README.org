@@ -73,7 +73,7 @@ python3 run_sim.py tb_dds_top
  - [X] Add phase-aligned odd harmonic scaling for Current (I).
  - [X] Upgrade simulation to use a 1 MSPS input and 12 bit ADC.
  - [X] Verify full range fundamental phase offset control (\phi) between V and I for power factor sweep (0 \le \phi \le 360^\circ).
- - [ ] Implement overflow saturation flags (~v_clip~, ~i_clip~) for hardware monitoring.
+ - [X] Implement overflow saturation flags (~v_clip~, ~i_clip~) for hardware monitoring.
  - [X] Combine and parameterize sine ROMs for DDS and PLL.
 
 

@@ -86,20 +86,33 @@ module sogi_pll_top #(
   end
 
   // -------------------------------------------------------------------------
-  // 3. Park Transform
+  // 3. Park Transform with Saturation Guardrails
   // -------------------------------------------------------------------------
+  logic signed [31:0] vd_intermediate, vq_intermediate;
   logic signed [31:0] mult_vd_a, mult_vd_b;
   logic signed [31:0] mult_vq_a, mult_vq_b;
 
   always_comb begin
+    // 1. Calculate products (32-bit)
     mult_vd_a = $signed(v_alpha_d1) * $signed(sin_val);
     mult_vd_b = $signed(v_beta_d1) * $signed(cos_val);
 
     mult_vq_a = $signed(v_alpha_d1) * $signed(cos_val);
     mult_vq_b = $signed(v_beta_d1) * $signed(sin_val);
 
-    v_d = 16'((mult_vd_a - mult_vd_b) >>> 14);
-    v_q = 16'((mult_vq_a + mult_vq_b) >>> 14);
+    // 2. Perform sum/diff and shift (Q15 * Q14 >> 14 = Q15)
+    vd_intermediate = (mult_vd_a - mult_vd_b) >>> 14;
+    vq_intermediate = (mult_vq_a + mult_vq_b) >>> 14;
+
+    // 3. Apply Saturation (Clamping)
+    // If result > 32767, set to 32767. If < -32768, set to -32768.
+    v_d = (vd_intermediate > 32'sd32767)  ? 16'sd32767 :
+          (vd_intermediate < -32'sd32768) ? -16'sd32768 :
+          16'(vd_intermediate);
+
+    v_q = (vq_intermediate > 32'sd32767)  ? 16'sd32767 :
+          (vq_intermediate < -32'sd32768) ? -16'sd32768 :
+          16'(vq_intermediate);
   end
 
   // -------------------------------------------------------------------------
