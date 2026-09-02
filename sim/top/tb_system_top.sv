@@ -5,8 +5,9 @@ module tb_system_top;
   // -------------------------------------------------------------------------
   // Timing & Frequency Parameters
   // -------------------------------------------------------------------------
-  localparam real SYSTEM_FREQ_HZ = 100_000.0;  // System clock frequency (1 MHz)
+  localparam real SYSTEM_FREQ_HZ = 1_000_000.0;  // System clock frequency (1 MHz)
   localparam real CENTER_FREQ_HZ = 60.0;  // Grid nominal frequency (60 Hz)
+  localparam int BAUD_RATE = 9600; // for UART
 
   // Derived Clock Half-Period in nanoseconds
   localparam real CLK_PERIOD_NS = (1.0e9 / SYSTEM_FREQ_HZ);
@@ -72,6 +73,10 @@ module tb_system_top;
   // Total harmonic distortion metric
   wire [3:-12] thd_val, thd_12c;
 
+  // UART
+  wire                uart_tx_out;
+  wire                uart_busy;
+
   // Self-Checking Verification Variables
   int                 error_count = 0;
   logic signed [15:0] max_vq_peak;
@@ -80,8 +85,9 @@ module tb_system_top;
   // Device Under Test (DUT)
   // -------------------------------------------------------------------------
   system_top #(
-      .CLOCK_FREQ_HZ (SYSTEM_FREQ_HZ),
-      .CENTER_FREQ_HZ(CENTER_FREQ_HZ)
+      .CLOCK_FREQ_HZ(SYSTEM_FREQ_HZ),
+      .CENTER_FREQ_HZ(CENTER_FREQ_HZ),
+      .BAUD_RATE(BAUD_RATE)
   ) uut (
       .*
   );
@@ -203,6 +209,40 @@ module tb_system_top;
   endtask
 
   // -------------------------------------------------------------------------
+  // UART Monitor Task (Virtual Serial Terminal)
+  // -------------------------------------------------------------------------
+  localparam real BIT_PERIOD_NS = 1_000_000_000.0 / BAUD_RATE;
+  reg uart_verbose;
+
+  task automatic monitor_uart();
+    logic [7:0] rx_byte;
+    $display("[UART] Monitor Started (%0d Baud)", BAUD_RATE);
+
+    forever begin
+      // 1. Wait for Start Bit (falling edge)
+      @(negedge uart_tx_out);
+
+      // 2. Wait 1.5 bit periods to sample middle of Bit 0
+      #(BIT_PERIOD_NS * 1.5);
+
+      // 3. Sample 8 Data Bits
+      for (int i = 0; i < 8; i++) begin
+        rx_byte[i] = uart_tx_out;
+        #(BIT_PERIOD_NS);
+      end
+
+      if (uart_verbose) begin
+        // 4. Print the decoded byte
+        $display("[UART] Received Byte: 0x%h", rx_byte);
+      end
+
+      // // Check for Header/Footer to help debug
+      // if (rx_byte == 8'hAA) $display("[UART] --- Start of Diagnostic Packet ---");
+      // if (rx_byte == 8'h55) $display("[UART] --- End of Diagnostic Packet ---");
+    end
+  endtask
+
+  // -------------------------------------------------------------------------
   // Main Verification Sequence
   // -------------------------------------------------------------------------
   initial begin
@@ -232,6 +272,11 @@ module tb_system_top;
     kp_pll        = 16'sd120;  // Proportional Gain
     ki_pll        = 16'sd40;  // Integral Gain
 
+    uart_verbose  = 0;
+    fork
+      monitor_uart();  // Start the background sniffer
+    join_none
+
     // Release Reset after 10 system clock cycles
     #(10.0 * CLK_PERIOD_NS);
     rst_n = 1;
@@ -239,14 +284,29 @@ module tb_system_top;
     // -----------------------------------------------------------------------
     // Phase 1: Grid Lock Acquisition
     // -----------------------------------------------------------------------
-    $display("[%0t ns] Phase 1: Initializing PLL tracking on nominal 60.0 Hz grid...", $time);
+    $display("[%0t] Phase 1: Initializing PLL tracking on nominal 60.0 Hz grid...", $time);
     #(LOCK_SETTLE_TIME);
     check_system("Phase 1: Initial Grid Lock", 60.0);
 
     // -----------------------------------------------------------------------
+    // Phase 1.1: UART Telemetry Check
+    // -----------------------------------------------------------------------
+    $display("\n[%0t] Phase 1.1: Waiting for UART Diagnostic Packet...", $time);
+    uart_verbose = 1;
+
+    // Wait for at least 12 grid cycles + transmission time
+    // Transmission of 8 bytes at 9600 baud takes ~8.3ms
+    #(GRID_PERIOD_NS * 15);
+
+    if (uart_tx_out == 1'b1) begin
+      $display("[PASS] Phase 1.1: UART line idle high (Ready).");
+    end
+    uart_verbose = 0;
+
+    // -----------------------------------------------------------------------
     // Phase 2: Frequency Step Tracking Test (+2.0 Hz Step)
     // -----------------------------------------------------------------------
-    $display("\n[%0t ns] Phase 2: Stepping grid frequency to 62.0 Hz...", $time);
+    $display("\n[%0t] Phase 2: Stepping grid frequency to 62.0 Hz...", $time);
     center_freq = to_q16_8(62.0);  // 62.0 Hz in Q16.8 format (24'd15872)
     #(LOCK_SETTLE_TIME);
     check_system("Phase 2: Frequency Step (+2.0 Hz)", 62.0);
@@ -257,7 +317,7 @@ module tb_system_top;
     // -----------------------------------------------------------------------
     // Phase 3: Voltage Sag / Amplitude Drop Test (50% Sag)
     // -----------------------------------------------------------------------
-    $display("\n[%0t ns] Phase 3: Injecting 50%% voltage sag...", $time);
+    $display("\n[%0t] Phase 3: Injecting 50%% voltage sag...", $time);
     v_peak = 15'd8192;  // Drop peak voltage magnitude by 50%
     #(TRANSIENT_TIME);
     check_system("Phase 3: Voltage Sag (50%)", 60.0);
@@ -266,7 +326,7 @@ module tb_system_top;
     // -----------------------------------------------------------------------
     // Phase 4: Harmonic Distortion Rejection Test
     // -----------------------------------------------------------------------
-    $display("\n[%0t ns] Phase 4: Injecting 3rd (15%%) and 5th (8%%) harmonics...", $time);
+    $display("\n[%0t] Phase 4: Injecting 3rd (15%%) and 5th (8%%) harmonics...", $time);
     v_h3_scale = 8'd38;  // ~15% 3rd harmonic
     v_h5_scale = 8'd20;  // ~8%  5th harmonic
     #(TRANSIENT_TIME);
@@ -277,7 +337,7 @@ module tb_system_top;
     // -----------------------------------------------------------------------
     // Phase 5: Phase Jitter Noise Test
     // -----------------------------------------------------------------------
-    $display("\n[%0t ns] Phase 5: Enabling high phase jitter & heavy harmonics...", $time);
+    $display("\n[%0t] Phase 5: Enabling high phase jitter & heavy harmonics...", $time);
     jitter_en    = 1'b1;
     jitter_depth = 4'd8;
     v_h3_scale   = 8'd38;
@@ -313,12 +373,48 @@ module tb_system_top;
     $finish;
   end
 
-  // -------------------------------------------------------------------------
-  // Waveform Dump Configuration
+// -------------------------------------------------------------------------
+  // Waveform Dump Configuration (Optimized for Surfer Setup)
   // -------------------------------------------------------------------------
   initial begin
     $dumpfile("sim/gen/vcd/current.vcd");
-    $dumpvars(0, tb_system_top);
+
+    $timeformat(-3, 2, " ms", 10);
+
+    // 1. System Control & Status
+    $dumpvars(0, tb_system_top.clk);
+    $dumpvars(0, tb_system_top.rst_n);
+    $dumpvars(0, tb_system_top.pll_locked);
+    $dumpvars(0, tb_system_top.center_freq);
+    $dumpvars(0, tb_system_top.current_phase);
+    $dumpvars(0, tb_system_top.jitter_en);
+    $dumpvars(0, tb_system_top.jitter_depth);
+
+    // 2. Primary Waveforms & PLL Tracking
+    $dumpvars(0, tb_system_top.v_out);
+    $dumpvars(0, tb_system_top.i_out);
+    $dumpvars(0, tb_system_top.v_alpha);
+    $dumpvars(0, tb_system_top.v_beta);
+    $dumpvars(0, tb_system_top.theta);
+    $dumpvars(0, tb_system_top.v_d);
+    $dumpvars(0, tb_system_top.v_q);
+    $dumpvars(0, tb_system_top.freq_out);
+
+    // 3. Power Engine & RMS Metrics
+    $dumpvars(0, tb_system_top.v_rms);
+    $dumpvars(0, tb_system_top.i_rms);
+    $dumpvars(0, tb_system_top.p_inst);
+    $dumpvars(0, tb_system_top.p_avg);
+    $dumpvars(0, tb_system_top.q_inst);
+    $dumpvars(0, tb_system_top.q_avg);
+
+    // 4. Harmonic Analysis (Including internal residual)
+    $dumpvars(0, tb_system_top.thd_val);
+    $dumpvars(0, tb_system_top.thd_12c);
+    $dumpvars(0, tb_system_top.uut.u_thd.v_harm_instant);
+    
+    // 5. UART Diagnostic Line
+    $dumpvars(0, tb_system_top.uart_tx_out);
   end
 
 endmodule

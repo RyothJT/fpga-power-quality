@@ -22,7 +22,9 @@ module thd_analyzer #(
     input logic               pll_locked,
 
     output logic [3:-12] thd_val,  // THD in Q4.12 format
-    output logic [3:-12] thd_12c   // THD averaged over 12 cycles per IEC 61000-4-30 standard
+    output logic [3:-12] thd_12c,  // THD averaged over 12 cycles per IEC 61000-4-30 standard
+
+    output logic update_strobe  // Pulse high for 1 cycle when thd_12c is updated
 );
 
   // -------------------------------------------------------------------------
@@ -127,6 +129,7 @@ module thd_analyzer #(
       window_sample_cnt <= 20'd0;
       thd_accumulator   <= 36'd0;
       thd_12c           <= '1;
+      update_strobe     <= 1'b0;
     end else if (measure_en) begin
       v_alpha_prev <= v_alpha;
 
@@ -135,17 +138,20 @@ module thd_analyzer #(
         window_sample_cnt <= 20'd0;
         thd_accumulator   <= 36'd0;
         thd_12c           <= '1;
+        update_strobe     <= 1'b0;
       end else begin
         // Accumulate instantaneous THD and count samples
         thd_accumulator   <= thd_accumulator + root_out;
         window_sample_cnt <= window_sample_cnt + 1'b1;
 
+        update_strobe     <= 1'b0;
         if (cycle_start) begin
           if (cycle_cnt >= 11) begin
             // 12 Cycles reached: Calculate Mean and Reset
             // Division by window_sample_cnt (approx 200,000 at 1MSPS)
             if (window_sample_cnt > 0) begin
-              thd_12c <= 16'(thd_accumulator / window_sample_cnt);
+              thd_12c       <= 16'(thd_accumulator / window_sample_cnt);
+              update_strobe <= 1'b1;
             end
 
             thd_accumulator   <= 36'd0;

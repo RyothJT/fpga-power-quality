@@ -7,8 +7,9 @@
  *              and instantaneous/average power calculation engine.
  */
 module system_top #(
-    parameter real CLOCK_FREQ_HZ  = 100_000_000.0,
-    parameter real CENTER_FREQ_HZ = 60.0
+    parameter real CLOCK_FREQ_HZ = 100_000_000.0,
+    parameter real CENTER_FREQ_HZ = 60.0,
+    parameter BAUD_RATE = 115200
 ) (
     input logic clk,
     input logic rst_n,
@@ -64,7 +65,11 @@ module system_top #(
 
     // Total harmonic distortion metric
     output logic [3:-12] thd_val,
-    output logic [3:-12] thd_12c
+    output logic [3:-12] thd_12c,
+
+    // UART for diagnostics
+    output logic uart_busy,
+    output logic uart_tx_out
 );
 
   // -------------------------------------------------------------------------
@@ -72,6 +77,25 @@ module system_top #(
   // -------------------------------------------------------------------------
   wire dds_rst = ~rst_n;
   wire measure_en;
+
+  wire uart_update_strobe;
+
+  // 0. Diagnostics Transmitter
+  diagnostic_transmitter #(
+      .CLOCK_FREQ_HZ(CLOCK_FREQ_HZ),
+      .BAUD_RATE(BAUD_RATE)
+  ) u_diag (
+      .clk(clk),
+      .rst(~rst_n),
+      .update_strobe(uart_update_strobe),
+      .v_rms(v_rms),
+      .thd_12c(thd_val),  // Or your 12-cycle version
+      .p_avg(p_avg),
+      .RsTx(uart_tx_out),  // Map to physical pin
+      .busy(),
+      .tx_start(),
+      .tx_data()
+  );
 
   // -------------------------------------------------------------------------
   // 1. Direct Digital Synthesizer (DDS) Core
@@ -152,15 +176,16 @@ module system_top #(
   thd_analyzer #(
       .CLOCK_FREQ_HZ(CLOCK_FREQ_HZ)
   ) u_thd (
-      .clk       (clk),
-      .rst_n     (rst_n),
-      .measure_en(measure_en),
-      .v_in      (v_out),
-      .v_alpha   (v_alpha),
-      .v_beta    (v_beta),
-      .pll_locked(pll_locked),
-      .thd_val   (thd_val),
-      .thd_12c   (thd_12c)
+      .clk          (clk),
+      .rst_n        (rst_n),
+      .measure_en   (measure_en),
+      .v_in         (v_out),
+      .v_alpha      (v_alpha),
+      .v_beta       (v_beta),
+      .pll_locked   (pll_locked),
+      .thd_val      (thd_val),
+      .thd_12c      (thd_12c),
+      .update_strobe(uart_update_strobe)
   );
 
 endmodule

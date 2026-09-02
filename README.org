@@ -65,7 +65,7 @@ python3 run_sim.py tb_dds_top
 
 * Phase 1 Execution Roadmap & TODOs
 
-** Digital Signal Generation (Internal Grid Model)
+** Digital Signal Generation (Internal Grid Model) [9/9]
  - [X] Implement fundamental 60 Hz DDS sine wave lookup table (~sine_rom.sv~).
  - [X] Add dynamic Q1.8 voltage sag scaling logic into ~dds_top.sv~.
  - [X] Integrate LFSR pseudo-random phase jitter injection (~lfsr_random.sv~).
@@ -76,18 +76,17 @@ python3 run_sim.py tb_dds_top
  - [X] Implement overflow saturation flags (~v_clip~, ~i_clip~) for hardware monitoring.
  - [X] Combine and parameterize sine ROMs for DDS and PLL.
 
-
-** Signal Conditioning & Sampling Interface
+** Signal Conditioning & Sampling Interface [0/2]
  - [ ] Instantiate and configure Xilinx XADC IP block for sampling dual analog inputs or streaming internal digital vectors.
  - [ ] Write XADC interface module (~xadc_interface.sv~) to convert raw XADC samples into 16-bit Q1.15 fixed-point V and I data buses.
 
-** Core Algorithmic Modules (HDL)
+** Core Algorithmic Modules (HDL) [4/4]
  - [X] Implement PI Loop Filter (~sogi_pll_top.sv~) for continuous phase/frequency error tracking (57 Hz \le f \le 63 Hz).
  - [X] Implement ~power_engine.sv~ using fixed-point multipliers to compute Instantaneous Active Power (P = V \cdot I) and Reactive Power (Q).
  - [X] Implement moving average / IIR filter for real-time V_{RMS} and I_{RMS} calculation.
  - [X] Implement Total Harmonic Distortion (THD) estimator block (~thd_analyzer.sv~).
 
-** Verification & Hardware Testing
+** Verification & Hardware Testing [0/2]
  - [ ] Write Vivado testbenches validating PLL lock speed during transient sags and phase jumps.
  - [ ] Configure Xilinx Integrated Logic Analyzer (ILA) IP to monitor internal P, Q, and \theta signals live on Basys 3 hardware via USB.
 
