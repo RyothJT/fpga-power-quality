@@ -86,79 +86,122 @@ module sogi_pll_top #(
   end
 
   // -------------------------------------------------------------------------
-  // 3. Park Transform with Saturation Guardrails
+  // 3. Park Transform (Pipelined Stages 1, 2, & 3)
   // -------------------------------------------------------------------------
-  logic signed [31:0] vd_intermediate, vq_intermediate;
-  logic signed [31:0] mult_vd_a, mult_vd_b;
-  logic signed [31:0] mult_vq_a, mult_vq_b;
 
-  always_comb begin
-    // 1. Calculate products (32-bit)
-    mult_vd_a = $signed(v_alpha_d1) * $signed(sin_val);
-    mult_vd_b = $signed(v_beta_d1) * $signed(cos_val);
+  // Stage 1: Input Isolation (AREG/BREG)
+  // No resets on these to maximize DSP internal register absorption
+  logic signed [15:0] va_pipe, vb_pipe;
+  logic signed [15:0] sin_pipe, cos_pipe;
 
-    mult_vq_a = $signed(v_alpha_d1) * $signed(cos_val);
-    mult_vq_b = $signed(v_beta_d1) * $signed(sin_val);
+  always_ff @(posedge clk) begin
+    va_pipe  <= v_alpha_d1;
+    vb_pipe  <= v_beta_d1;
+    sin_pipe <= sin_val;
+    cos_pipe <= cos_val;
+  end
 
-    // 2. Perform sum/diff and shift (Q15 * Q14 >> 14 = Q15)
-    vd_intermediate = (mult_vd_a - mult_vd_b) >>> 14;
-    vq_intermediate = (mult_vq_a + mult_vq_b) >>> 14;
+  // Stage 2: DSP Products (MREG/PREG)
+  logic signed [31:0] p_mult_vd_a, p_mult_vd_b;
+  logic signed [31:0] p_mult_vq_a, p_mult_vq_b;
 
-    // 3. Apply Saturation (Clamping)
-    // If result > 32767, set to 32767. If < -32768, set to -32768.
-    v_d = (vd_intermediate > 32'sd32767)  ? 16'sd32767 :
-          (vd_intermediate < -32'sd32768) ? -16'sd32768 :
-          16'(vd_intermediate);
+  always_ff @(posedge clk) begin
+    p_mult_vd_a <= va_pipe * sin_pipe;
+    p_mult_vd_b <= vb_pipe * cos_pipe;
+    p_mult_vq_a <= va_pipe * cos_pipe;
+    p_mult_vq_b <= vb_pipe * sin_pipe;
+  end
 
-    v_q = (vq_intermediate > 32'sd32767)  ? 16'sd32767 :
-          (vq_intermediate < -32'sd32768) ? -16'sd32768 :
-          16'(vq_intermediate);
+  // Stage 3: Vector Summation & Saturation
+  // We use logic signed [32:0] for the sum to prevent overflow
+  logic signed [32:0] p_vd_sum, p_vq_sum;
+
+  always_ff @(posedge clk) begin
+    // 1. Declarations MUST come first in the block for Icarus
+    logic signed [31:0] vd_s;
+    logic signed [31:0] vq_s;
+
+    if (!rst_n) begin
+      p_vd_sum <= '0;
+      p_vq_sum <= '0;
+      v_d      <= '0;
+      v_q      <= '0;
+    end else begin
+      // 2. Procedural assignments follow
+      p_vd_sum <= $signed(p_mult_vd_a) - $signed(p_mult_vd_b);
+      p_vq_sum <= $signed(p_mult_vq_a) + $signed(p_mult_vq_b);
+
+      // Perform arithmetic shift
+      vd_s = p_vd_sum >>> 14;
+      vq_s = p_vq_sum >>> 14;
+
+      // Apply Clamping
+      v_d <= (vd_s > 32'sd32767) ? 16'sd32767 : (vd_s < -32'sd32768) ? -16'sd32768 : 16'(vd_s);
+
+      v_q <= (vq_s > 32'sd32767) ? 16'sd32767 : (vq_s < -32'sd32768) ? -16'sd32768 : 16'(vq_s);
+    end
   end
 
   // -------------------------------------------------------------------------
-  // 4. PI Loop Filter & NCO Phase Accumulator
+  // 4. PI Loop Filter (Pipelined for MREG/PREG)
   // -------------------------------------------------------------------------
+
+  // MULTIPLIER PIPELINE: NO RESET
+  (* use_dsp = "yes" *)logic signed [31:0] ki_stage1_mreg;
+  (* use_dsp = "yes" *)logic signed [31:0] ki_stage1_preg;
+  (* use_dsp = "yes" *)logic signed [31:0] p_term_mreg;
+  (* use_dsp = "yes" *)logic signed [31:0] p_term_preg;
+
+  always_ff @(posedge clk) begin
+    p_term_mreg    <= $signed(v_q) * $signed(kp_pll);
+    p_term_preg    <= p_term_mreg;
+
+    ki_stage1_mreg <= $signed(v_q) * $signed(ki_pll);
+    ki_stage1_preg <= ki_stage1_mreg;
+  end
+
+  // INTEGRATOR & NCO: RESET REQUIRED
   logic signed [47:0] integrator_acc;
-  logic signed [31:0] p_term;
-  logic signed [31:0] i_term;
-  logic signed [31:0] pi_out;
-  localparam real CLK_GAIN_SCALE_R = 100_000_000.0 / CLOCK_FREQ_HZ;
-  localparam logic signed [31:0] CLK_GAIN_SCALE = 32'($rtoi(CLK_GAIN_SCALE_R * 65536.0));  // Q16.16
-
-  assign i_term = integrator_acc[47:16];
-
-  always_comb begin
-    p_term = $signed(v_q) * $signed(kp_pll);
-    pi_out = p_term + i_term;
-  end
-
-  logic signed [47:0] ki_scaled;
-  // Scale ki_pll proportionally so loop bandwidth remains fixed in Hz
-  assign ki_scaled = ($signed(v_q) * $signed(ki_pll) * CLK_GAIN_SCALE) >>> 16;
+  logic signed [31:0] pi_out_reg;
 
   always_ff @(posedge clk) begin
     if (!rst_n) begin
       integrator_acc <= '0;
+      pi_out_reg     <= '0;
       phase_acc      <= '0;
     end else begin
-      integrator_acc <= integrator_acc + 48'(ki_scaled);
-      phase_acc      <= phase_acc + phase_inc;
-    end
-  end
+      // Stage 2 Multiplier (Gain Scaling) and Accumulation
+      // Note: This 32x32 multiply is small enough to happen here if PREG is used above
+      integrator_acc <= integrator_acc + 48'(($signed(
+          ki_stage1_preg
+      ) * $signed(
+          {1'b0, NOMINAL_PHASE_INC}
+      )) >>> 12);
 
-  always_comb begin
-    if ($signed(NOMINAL_PHASE_INC + pi_out) < $signed(32'd1)) begin
-      phase_inc = 32'd1;
-    end else begin
-      phase_inc = NOMINAL_PHASE_INC + pi_out;
+      pi_out_reg <= p_term_preg + $signed(integrator_acc[47:16]);
+
+      // NCO Phase Accumulator
+      if ($signed(NOMINAL_PHASE_INC + pi_out_reg) < $signed(32'd1)) phase_acc <= phase_acc + 32'd1;
+      else phase_acc <= phase_acc + 32'(NOMINAL_PHASE_INC + pi_out_reg);
     end
   end
 
   // -------------------------------------------------------------------------
-  // 5. Output & Phase-Reset Frequency Measurement & Smoothed Phase Inc
+  // 5. Output & Phase-Reset Frequency Measurement
   // -------------------------------------------------------------------------
+
+  // NCO Angle Output
   assign theta = phase_acc[31:16];
 
+  // Instantaneous phase increment derived from the PI pipeline register.
+  // This ensures the signal is never 'X' during the reset transition.
+  assign phase_inc = ($signed(
+      NOMINAL_PHASE_INC + pi_out_reg
+  ) < $signed(
+      32'd1
+  )) ? 32'd1 : 32'(NOMINAL_PHASE_INC + pi_out_reg);
+
+  // Rollover Detection State Machine (Zone-based)
   typedef enum logic {
     LOWER_ZONE,
     UPPER_ZONE
@@ -172,12 +215,9 @@ module sogi_pll_top #(
       phase_reset_pulse <= 1'b0;
     end else begin
       phase_reset_pulse <= 1'b0;
-
       case (current_zone)
         LOWER_ZONE: begin
-          if (phase_acc >= 32'hC000_0000) begin
-            current_zone <= UPPER_ZONE;
-          end
+          if (phase_acc >= 32'hC000_0000) current_zone <= UPPER_ZONE;
         end
         UPPER_ZONE: begin
           if (phase_acc < 32'h4000_0000) begin
@@ -189,10 +229,9 @@ module sogi_pll_top #(
     end
   end
 
+  // Period Counter and Phase Increment Smoother
   logic [31:0] clk_counter;
   logic [31:0] measured_period_clks;
-
-  // Accumulator for period-averaging phase_inc
   logic [63:0] phase_inc_sum;
 
   always_ff @(posedge clk) begin
@@ -203,13 +242,15 @@ module sogi_pll_top #(
       phase_inc_smoothed   <= NOMINAL_PHASE_INC;
     end else begin
       clk_counter   <= clk_counter + 1'b1;
+      // Accumulate the instantaneous phase_inc for averaging
       phase_inc_sum <= phase_inc_sum + 64'(phase_inc);
 
       if (phase_reset_pulse) begin
         measured_period_clks <= clk_counter;
         clk_counter          <= '0;
 
-        // Average phase_inc over the completed 60 Hz fundamental period
+        // Average phase_inc over the completed 60 Hz fundamental period.
+        // This provides a stable frequency bus for the Current QSG.
         if (clk_counter > 0) begin
           phase_inc_smoothed <= 32'(phase_inc_sum / 64'(clk_counter));
         end
@@ -218,6 +259,7 @@ module sogi_pll_top #(
     end
   end
 
+  // Final Frequency Calculation (Q16.8 format)
   logic [63:0] freq_calc;
   assign freq_calc = FREQ_SCALE / 64'(measured_period_clks);
   assign freq_out  = freq_calc[23:0];

@@ -35,70 +35,127 @@ module thd_analyzer #(
   localparam int K = $clog2($rtoi(DIVISOR));
 
   // -------------------------------------------------------------------------
-  // 2. Time-Domain Harmonic Isolation
+  // 2. Time-Domain Harmonic Isolation (Pipelined Stage 1 & 2)
   // -------------------------------------------------------------------------
-  // Subtract fundamental from raw signal before squaring.
-  // This drastically reduces the ripple magnitude entering the filter.
-  logic signed [15:0] v_harm_instant;
+  logic signed [15:0] v_in_reg, va_reg, vb_reg;
+  logic signed [15:0] v_harm_logic;
+
   always_ff @(posedge clk) begin
     if (!rst_n) begin
-      v_harm_instant <= 16'd0;  // <--- MANDATORY: Initialize to 0
-    end else if (measure_en) v_harm_instant <= v_in - v_alpha;
+      v_in_reg     <= '0;
+      va_reg       <= '0;
+      vb_reg       <= '0;
+      v_harm_logic <= '0;
+    end else begin
+      // Stage 1: Capture Raw Inputs
+      v_in_reg <= v_in;
+      va_reg <= v_alpha;
+      vb_reg <= v_beta;
+
+      // Stage 2: Calculate Residual (Logic outside DSP)
+      v_harm_logic <= v_in_reg - va_reg;
+    end
   end
 
   // -------------------------------------------------------------------------
-  // 3. Power Accumulation (Mean Square)
+  // 3. Power Accumulation Pipeline (Pipelined Stage 3, 4, 5)
   // -------------------------------------------------------------------------
-  logic [31:0] p_harm_inst;
-  logic [31:0] p_fund_inst;
 
-  assign p_harm_inst = 32'($signed(v_harm_instant) * $signed(v_harm_instant));
-  assign p_fund_inst = 32'((($signed(
-      v_alpha
-  ) * $signed(
-      v_alpha
-  )) + ($signed(
-      v_beta
-  ) * $signed(
-      v_beta
-  ))) >>> 1);
+  // Stage 3: Clean Multiplier Inputs (AREG/BREG)
+  logic signed [15:0] m_harm_a, m_fund_a, m_fund_b;
+  always_ff @(posedge clk) begin
+    if (!rst_n) begin
+      m_harm_a <= '0;
+      m_fund_a <= '0;
+      m_fund_b <= '0;
+    end else begin
+      m_harm_a <= v_harm_logic;
+      m_fund_a <= va_reg;
+      m_fund_b <= vb_reg;
+    end
+  end
 
-  // Accumulators scaled by dynamic K
-  logic [32+K-1:0] ms_harm_acc;
-  logic [32+K-1:0] ms_fund_acc;
+  // Stage 4: Multiplier Output (MREG)
+  logic [31:0] p_harm_m, p_fund_a_m, p_fund_b_m;
+  always_ff @(posedge clk) begin
+    if (!rst_n) begin
+      p_harm_m   <= '0;
+      p_fund_a_m <= '0;
+      p_fund_b_m <= '0;
+    end else begin
+      p_harm_m   <= m_harm_a * m_harm_a;
+      p_fund_a_m <= m_fund_a * m_fund_a;
+      p_fund_b_m <= m_fund_b * m_fund_b;
+    end
+  end
+
+  // Stage 5: Final Multiplier Output (PREG)
+  logic [31:0] p_harm_p, p_fund_a_p, p_fund_b_p;
+  always_ff @(posedge clk) begin
+    if (!rst_n) begin
+      p_harm_p   <= '0;
+      p_fund_a_p <= '0;
+      p_fund_b_p <= '0;
+    end else begin
+      p_harm_p   <= p_harm_m;
+      p_fund_a_p <= p_fund_a_m;
+      p_fund_b_p <= p_fund_b_m;
+    end
+  end
+
+  // Mean Square Inputs (Logic)
+  logic [31:0] p_harm_inst_pipe;
+  logic [31:0] p_fund_inst_pipe;
+  assign p_harm_inst_pipe = p_harm_p;
+  assign p_fund_inst_pipe = (p_fund_a_p + p_fund_b_p) >> 1;
+
+  // IIR Accumulators
+  logic [32+K-1:0] ms_harm_acc, ms_fund_acc;
 
   always_ff @(posedge clk) begin
     if (!rst_n) begin
       ms_harm_acc <= '0;
       ms_fund_acc <= '0;
     end else if (measure_en) begin
-      ms_harm_acc <= ms_harm_acc + p_harm_inst - (ms_harm_acc >> K);
-      ms_fund_acc <= ms_fund_acc + p_fund_inst - (ms_fund_acc >> K);
+      // The leaky integrator now receives clean, registered power values
+      ms_harm_acc <= ms_harm_acc + p_harm_inst_pipe - (ms_harm_acc >> K);
+      ms_fund_acc <= ms_fund_acc + p_fund_inst_pipe - (ms_fund_acc >> K);
     end
   end
-
-  wire  [ 31:0] ms_harm = ms_harm_acc >> K;
-  wire  [ 31:0] ms_fund = ms_fund_acc >> K;
 
   // -------------------------------------------------------------------------
   // 4. Ratio and Square Root (THD Calculation)
   // -------------------------------------------------------------------------
+
+  // 1. Declare the extracted Mean Square values FIRST
+  wire [31:0] ms_harm;
+  wire [31:0] ms_fund;
+
+  assign ms_harm = ms_harm_acc >> K;
+  assign ms_fund = ms_fund_acc >> K;
+
+  // 2. Ratio Calculation
   logic [ 63:0] ratio_num;
   logic [ 31:0] thd_sq_q24;
-  logic [-3:12] root_out;
+  logic [3:-12] root_out;
 
-  assign ratio_num = (64'(ms_harm) << 24);
+  // Use concatenation {32'b0, ...} instead of 64'(...) for better Icarus support
+  assign ratio_num = {32'b0, ms_harm} << 24;
 
   always_ff @(posedge clk) begin
     if (!rst_n) begin
       thd_sq_q24 <= '0;
-    end else if (pll_locked && ms_fund > 100) begin
-      thd_sq_q24 <= 32'(ratio_num / ms_fund);
-    end else begin
-      thd_sq_q24 <= '0;
+    end else if (measure_en) begin
+      // Only perform division when the fundamental magnitude is significant
+      if (pll_locked && ms_fund > 100) begin
+        thd_sq_q24 <= 32'(ratio_num / ms_fund);
+      end else begin
+        thd_sq_q24 <= '0;
+      end
     end
   end
 
+  // 3. Square Root Instance
   isqrt #(
       .WIDTH(32)
   ) u_isqrt_thd (

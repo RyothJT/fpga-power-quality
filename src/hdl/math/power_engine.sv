@@ -9,55 +9,64 @@ module power_engine #(
     input logic rst_n,
 
     input logic signed [15:0] v_alpha,
-    input logic signed [15:0] v_beta,
+    v_beta,
     input logic signed [15:0] i_alpha,
-    input logic signed [15:0] i_beta,
+    i_beta,
 
     output logic signed [15:0] p_inst,
-    output logic signed [15:0] q_inst,
+    q_inst,
     output logic signed [15:0] p_avg,
-    output logic signed [15:0] q_avg,
+    q_avg,
     output logic        [15:0] v_rms,
-    output logic        [15:0] i_rms
+    i_rms
 );
 
-  // Derive bit-shift factor K dynamically from clock frequency and target cutoff
-  localparam real DIVISOR = CLOCK_FREQ_HZ / (2.0 * 3.141592653589793 * CUTOFF_FREQ_HZ);
+  localparam real DIVISOR = CLOCK_FREQ_HZ / (2.0 * 3.1415926535 * CUTOFF_FREQ_HZ);
   localparam int K = $clog2($rtoi(DIVISOR));
 
   // -------------------------------------------------------------------------
-  // 1. Instantaneous Power Multiplications
+  // 1. Instantaneous Power Pipeline (P and Q)
   // -------------------------------------------------------------------------
-  logic signed [31:0] p_prod_a, p_prod_b;
-  logic signed [31:0] q_prod_a, q_prod_b;
-  logic signed [31:0] q_mult_a, q_mult_b;
+  logic signed [15:0] va_reg, vb_reg, ia_reg, ib_reg;
+  logic signed [31:0] p_proda_m, p_prodb_m, q_proda_m, q_prodb_m;
+  logic signed [31:0] p_proda_p, p_prodb_p, q_proda_p, q_prodb_p;
 
   always_ff @(posedge clk) begin
     if (!rst_n) begin
-      p_prod_a <= '0;
-      p_prod_b <= '0;
-      q_prod_a <= '0;
-      q_prod_b <= '0;
-      p_inst   <= '0;
-      q_inst   <= '0;
+      {va_reg, vb_reg, ia_reg, ib_reg} <= '0;
+      {p_proda_m, p_prodb_m, q_proda_m, q_prodb_m} <= '0;
+      {p_proda_p, p_prodb_p, q_proda_p, q_prodb_p} <= '0;
+      p_inst <= '0;
+      q_inst <= '0;
     end else begin
-      p_prod_a <= $signed(v_alpha) * $signed(i_alpha);
-      p_prod_b <= $signed(v_beta) * $signed(i_beta);
+      // Stage 1: Input AREG/BREG
+      va_reg <= v_alpha;
+      vb_reg <= v_beta;
+      ia_reg <= i_alpha;
+      ib_reg <= i_beta;
 
-      q_prod_a <= $signed(v_beta) * $signed(i_alpha);
-      q_prod_b <= $signed(v_alpha) * $signed(i_beta);
+      // Stage 2: MREG
+      p_proda_m <= va_reg * ia_reg;
+      p_prodb_m <= vb_reg * ib_reg;
+      q_proda_m <= vb_reg * ia_reg;
+      q_prodb_m <= va_reg * ib_reg;
 
-      p_inst   <= 16'(($signed(p_prod_a) + $signed(p_prod_b)) >>> 16);
-      q_inst   <= 16'(($signed(q_prod_a) - $signed(q_prod_b)) >>> 16);
+      // Stage 3: PREG
+      p_proda_p <= p_proda_m;
+      p_prodb_p <= p_prodb_m;
+      q_proda_p <= q_proda_m;
+      q_prodb_p <= q_prodb_m;
+
+      // Stage 4: Sum and Shift (Q30 -> Q15 and divide by 2)
+      p_inst <= 16'(($signed(p_proda_p) + $signed(p_prodb_p)) >>> 16);
+      q_inst <= 16'(($signed(q_proda_p) - $signed(q_prodb_p)) >>> 16);
     end
   end
 
   // -------------------------------------------------------------------------
-  // 2. Mean Active and Reactive Power Filtering (with Unbiased Rounding)
+  // 2. Mean Power IIR Filters
   // -------------------------------------------------------------------------
-  logic signed [16+K-1:0] p_iir_acc;
-  logic signed [16+K-1:0] q_iir_acc;
-
+  logic signed [16+K-1:0] p_iir_acc, q_iir_acc;
   always_ff @(posedge clk) begin
     if (!rst_n) begin
       p_iir_acc <= '0;
@@ -67,61 +76,57 @@ module power_engine #(
       q_iir_acc <= q_iir_acc + $signed(q_inst) - $signed(q_iir_acc >>> K);
     end
   end
-
-  // Round to nearest integer using 2^(K-1) rounding constant
   assign p_avg = 16'($signed(p_iir_acc + (1 << (K - 1))) >>> K);
   assign q_avg = 16'($signed(q_iir_acc + (1 << (K - 1))) >>> K);
+
   // -------------------------------------------------------------------------
-  // 3. Squared Signal & Mean Square Accumulation
+  // 3. RMS Squaring Pipeline (v^2 and i^2)
   // -------------------------------------------------------------------------
+  // Note: Squaring a 16-bit signed results in 31-bit unsigned. We use 32-bit logic.
+  logic [31:0] va_sq_m, vb_sq_m, ia_sq_m, ib_sq_m;
+  logic [31:0] va_sq_p, vb_sq_p, ia_sq_p, ib_sq_p;
+
+  always_ff @(posedge clk) begin
+    if (!rst_n) begin
+      {va_sq_m, vb_sq_m, ia_sq_m, ib_sq_m} <= '0;
+      {va_sq_p, vb_sq_p, ia_sq_p, ib_sq_p} <= '0;
+    end else begin
+      // Stage 2: MREG (Inputs are already registered in va_reg etc. from Section 1)
+      va_sq_m <= va_reg * va_reg;
+      vb_sq_m <= vb_reg * vb_reg;
+      ia_sq_m <= ia_reg * ia_reg;
+      ib_sq_m <= ib_reg * ib_reg;
+
+      // Stage 3: PREG
+      va_sq_p <= va_sq_m;
+      vb_sq_p <= vb_sq_m;
+      ia_sq_p <= ia_sq_m;
+      ib_sq_p <= ib_sq_m;
+    end
+  end
+
+  // Stage 4: Mean Square calculation ( (a^2 + b^2) / 2 )
   logic [31:0] v_mag_sq, i_mag_sq;
+  assign v_mag_sq = (va_sq_p + vb_sq_p) >> 1;
+  assign i_mag_sq = (ia_sq_p + ib_sq_p) >> 1;
 
-  // v_alpha^2 + v_beta^2 = Peak Amplitude Squared.
-  // We divide by 2 to get the Mean Square (MS) for a sine wave.
-  // Using 33 bits for the sum to prevent overflow before the shift
-  assign v_mag_sq = 32'((($signed(
-      v_alpha
-  ) * $signed(
-      v_alpha
-  )) + ($signed(
-      v_beta
-  ) * $signed(
-      v_beta
-  ))) >>> 1);
-
-  assign i_mag_sq = 32'((($signed(
-      i_alpha
-  ) * $signed(
-      i_alpha
-  )) + ($signed(
-      i_beta
-  ) * $signed(
-      i_beta
-  ))) >>> 1);
-
-  // Accumulators must be wide enough to hold 32 bits + K bits of filtering state
+  // -------------------------------------------------------------------------
+  // 4. RMS IIR Accumulators and Square Root
+  // -------------------------------------------------------------------------
   logic [32+K-1:0] v_sq_acc, i_sq_acc;
-
   always_ff @(posedge clk) begin
     if (!rst_n) begin
       v_sq_acc <= '0;
       i_sq_acc <= '0;
     end else begin
-      // Standard IIR Filter: acc = acc + input - (acc >> K)
-      // No pre-shifting! Keep the full precision of the 32-bit square.
       v_sq_acc <= v_sq_acc + v_mag_sq - (v_sq_acc >> K);
       i_sq_acc <= i_sq_acc + i_mag_sq - (i_sq_acc >> K);
     end
   end
 
-  // Extract the filtered Mean Square (MS) value
   wire [31:0] v_ms = (v_sq_acc + (1 << (K - 1))) >> K;
   wire [31:0] i_ms = (i_sq_acc + (1 << (K - 1))) >> K;
 
-  // -------------------------------------------------------------------------
-  // 4. Square Root Core
-  // -------------------------------------------------------------------------
-  // Input: 32-bit (Mean Square), Output: 16-bit (Root Mean Square)
   isqrt #(
       .WIDTH(32)
   ) u_isqrt_v (
@@ -130,7 +135,6 @@ module power_engine #(
       .val_in(v_ms),
       .root_out(v_rms)
   );
-
   isqrt #(
       .WIDTH(32)
   ) u_isqrt_i (

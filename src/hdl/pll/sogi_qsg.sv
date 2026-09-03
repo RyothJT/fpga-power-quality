@@ -1,175 +1,137 @@
 `timescale 1ns / 1ps
 
-/**
- * Module: sogi_qsg
- * Description: Second-Order Generalized Integrator (SOGI) Quadrature Signal Generator (QSG)
- *              with Optional Parameter-Controlled Dynamic Frequency Adaptation.
- */
 module sogi_qsg #(
-    parameter real  CLOCK_FREQ_HZ    = 100_000_000.0, // System clock frequency
-    parameter real  CENTER_FREQ_HZ   = 60.0,          // Target nominal grid frequency
-    parameter bit   ENABLE_FREQ_ADAPT = 1'b1           // 1: Enable PLL feedback adaptation, 0: Fixed nominal freq
+    parameter real  CLOCK_FREQ_HZ    = 100_000_000.0,
+    parameter real  CENTER_FREQ_HZ   = 60.0,
+    parameter bit   ENABLE_FREQ_ADAPT = 1'b1
 ) (
     input logic               clk,
     input logic               rst_n,
-    input logic signed [15:0] u_in,          // Scalar input signal
-    input logic signed [15:0] k_sogi,        // Gain factor (16'sd16384 = 1.0, Q1.14)
-    input logic        [31:0] phase_inc_in,  // Dynamic phase increment (used when ENABLE_FREQ_ADAPT = 1)
+    input logic signed [15:0] u_in,
+    input logic signed [15:0] k_sogi,
+    input logic        [31:0] phase_inc_in,
 
-    output logic signed [15:0] u_alpha,      // In-phase filtered output
-    output logic signed [15:0] u_beta        // Quadrature 90-degree lagged output
+    output logic signed [15:0] u_alpha,
+    output logic signed [15:0] u_beta
 );
 
   // -------------------------------------------------------------------------
-  // Local Parameters & Derived Math
+  // 1. Frequency Adaptation (Strict DSP Pipeline)
   // -------------------------------------------------------------------------
   localparam real M_PI = 3.14159265358979323846;
-
-  // Nominal Phase Increment: (CENTER_FREQ * 2^32) / CLOCK_FREQ
   localparam real NOM_PHASE_INC_R = (CENTER_FREQ_HZ * 4294967296.0) / CLOCK_FREQ_HZ;
-  localparam logic [31:0] NOMINAL_PHASE_INC = 32'($rtoi(NOM_PHASE_INC_R));
+  localparam logic signed [31:0] FIXED_W0_DT = 32'($rtoi(2.0 * M_PI * NOM_PHASE_INC_R));
 
-  // Scaled 2*PI factor: (2 * PI) * 2^16
-  localparam real W0_SCALE_R = (2.0 * M_PI) * 65536.0;
-  localparam logic signed [63:0] W0_SCALE_FACTOR = 64'($rtoi(W0_SCALE_R));
-
-  // Fixed Nominal w0_dt value (pre-calculated at compile time for open-loop mode)
-  localparam logic signed [63:0] FIXED_W0_MULT = $signed({32'b0, NOMINAL_PHASE_INC}) * W0_SCALE_FACTOR;
-  localparam logic signed [31:0] FIXED_W0_DT   = 32'(FIXED_W0_MULT >>> 16);
-
-  // Dynamic Clamping bounds (-20% to +20% frequency variation: e.g., 48Hz - 72Hz)
-  localparam real NOM_W0_DT_R = 2.0 * M_PI * NOM_PHASE_INC_R;
-  localparam logic signed [31:0] W0_DT_MIN = 32'($rtoi(NOM_W0_DT_R * 0.80));
-  localparam logic signed [31:0] W0_DT_MAX = 32'($rtoi(NOM_W0_DT_R * 1.20));
-
-  // -------------------------------------------------------------------------
-  // Dynamic Clock-Independent Damping Constant Calculation
-  // Target time constant tau = 1.0 ms (f_cutoff ~ 160 Hz for parameter smoothing)
-  // -------------------------------------------------------------------------
-  localparam real TARGET_TAU_SEC = 0.001;
-  localparam real SHIFT_CALC = $ln(CLOCK_FREQ_HZ * TARGET_TAU_SEC) / $ln(2.0);
-
-  localparam int SHIFT_BITS = (SHIFT_CALC < 2.0) ? 2 : ((SHIFT_CALC > 16.0) ? 16 : $rtoi(
-      SHIFT_CALC
-  ));
-
-  // -------------------------------------------------------------------------
-  // 1. Parameter-Controlled Frequency Adaptation Core
-  // -------------------------------------------------------------------------
   logic signed [31:0] w0_dt_dynamic;
 
   generate
     if (ENABLE_FREQ_ADAPT) begin : g_freq_adapt
-      logic signed [47:0] w0_dt_iir_acc;
+      localparam logic signed [17:0] W0_FACTOR_SMALL = 18'($rtoi(2.0 * M_PI * 8192.0));
+      logic signed [31:0] p_inc_pipe1, p_inc_pipe2;
+      logic signed [49:0] w0_mreg, w0_preg;
       logic signed [31:0] w0_dt_raw;
-      logic signed [63:0] w0_mult_full;
-
-      logic signed [31:0] w0_dt_iir_msb;
-      assign w0_dt_iir_msb = w0_dt_iir_acc[47:16];
-
-      // Dynamic frequency math driven by phase_inc_in input
-      assign w0_mult_full = $signed({32'b0, phase_inc_in}) * W0_SCALE_FACTOR;
-      assign w0_dt_raw    = 32'(w0_mult_full >>> 16);
+      logic signed [47:0] w0_dt_iir_acc;
 
       always_ff @(posedge clk) begin
+        // Multiplier Pipeline (NO RESET)
+        p_inc_pipe1 <= $signed({1'b0, phase_inc_in});
+        p_inc_pipe2 <= p_inc_pipe1;  // AREG=2
+        w0_mreg     <= p_inc_pipe2 * W0_FACTOR_SMALL;  // MREG
+        w0_preg     <= w0_mreg;  // PREG
+
         if (!rst_n) begin
           w0_dt_iir_acc <= {FIXED_W0_DT, 16'b0};
+          w0_dt_raw     <= FIXED_W0_DT;
         end else begin
-          w0_dt_iir_acc <= w0_dt_iir_acc - (w0_dt_iir_acc >>> SHIFT_BITS) + ({w0_dt_raw, 16'b0} >>> SHIFT_BITS);
+          w0_dt_raw     <= 32'(w0_preg >>> 13);
+          w0_dt_iir_acc <= w0_dt_iir_acc - (w0_dt_iir_acc >>> 16) + ({w0_dt_raw, 16'b0} >>> 16);
         end
       end
-
-      // Dynamic clamping bounds
-      always_comb begin
-        if (w0_dt_iir_msb < W0_DT_MIN) begin
-          w0_dt_dynamic = W0_DT_MIN;
-        end else if (w0_dt_iir_msb > W0_DT_MAX) begin
-          w0_dt_dynamic = W0_DT_MAX;
-        end else begin
-          w0_dt_dynamic = w0_dt_iir_msb;
-        end
-      end
-
+      assign w0_dt_dynamic = w0_dt_iir_acc[47:16];
     end else begin : g_fixed_freq
-      // Standalone mode: Fixed compile-time nominal center frequency (zero runtime hardware overhead)
       assign w0_dt_dynamic = FIXED_W0_DT;
     end
   endgenerate
 
   // -------------------------------------------------------------------------
-  // 2. SOGI Core Integrators
+  // 2. SOGI Core Integrators (Strict 10-Stage Hardware Pipeline)
   // -------------------------------------------------------------------------
-  logic signed [47:0] alpha_acc;
-  logic signed [47:0] beta_acc;
-
-  logic signed [15:0] alpha_state;
-  logic signed [15:0] beta_state;
-  logic signed [31:0] err;
-  logic signed [31:0] k_err;
-  logic signed [31:0] d_alpha_raw;
-  logic signed [31:0] d_beta_raw;
-
-  logic signed [63:0] d_alpha_ext, d_beta_ext;
-  logic signed [63:0] w0_dt_ext;
-
+  logic signed [47:0] alpha_acc, beta_acc;
+  logic signed [15:0] alpha_state, beta_state;
   assign alpha_state = alpha_acc[47:32];
   assign beta_state  = beta_acc[47:32];
 
-  always_comb begin
-    err         = $signed(u_in) - $signed(alpha_state);
-    k_err       = ($signed(err) * $signed(k_sogi)) >>> 14;
-    d_alpha_raw = k_err - $signed(beta_state);
-    d_beta_raw  = $signed(alpha_state);
+  // --- FABRIC STAGE (Logic with Resets) ---
+  logic signed [15:0] err_logic;
+  logic signed [31:0] d_alpha_logic, d_beta_logic;
+  logic signed [31:0] w0_logic;
 
-    d_alpha_ext = 64'(d_alpha_raw);
-    d_beta_ext  = 64'(d_beta_raw);
-    w0_dt_ext   = 64'(w0_dt_dynamic);
+  // --- DSP STAGE 1: Multiplier 1 (k * err) ---
+  // NO RESET ALLOWED. Pure data pipeline for MREG/PREG inference.
+  (* use_dsp = "yes" *) logic signed [15:0] m1_a, m1_b;
+  (* use_dsp = "yes" *) logic signed [31:0] m1_mreg, m1_preg;
+
+  always_ff @(posedge clk) begin
+    if (!rst_n) begin
+      err_logic     <= '0;
+      d_alpha_logic <= '0;
+      d_beta_logic  <= '0;
+      w0_logic      <= FIXED_W0_DT;
+    end else begin
+      err_logic     <= u_in - alpha_state;
+      d_alpha_logic <= (m1_preg >>> 14) - $signed(beta_state);
+      d_beta_logic  <= $signed(alpha_state);
+      w0_logic      <= w0_dt_dynamic;
+    end
   end
 
-// Inside sogi_qsg.sv
-
-  logic signed [47:0] next_alpha_acc, next_beta_acc;
-  localparam logic signed [47:0] POS_LIMIT = 48'h7FFF_FFFF_FFFF;
-  localparam logic signed [47:0] NEG_LIMIT = 48'h8000_0000_0000;
-
-  always_comb begin
-    // Calculate the next raw states
-    next_alpha_acc = alpha_acc + 48'($signed(d_alpha_ext * w0_dt_ext));
-    next_beta_acc  = beta_acc  + 48'($signed(d_beta_ext * w0_dt_ext));
+  always_ff @(posedge clk) begin
+    m1_a    <= err_logic;
+    m1_b    <= k_sogi;
+    m1_mreg <= m1_a * m1_b; // Hardware MREG
+    m1_preg <= m1_mreg;     // Hardware PREG
   end
 
+  // --- DSP STAGE 2: Multipliers 2 & 3 (d * w0) ---
+  // 32x32 multiply: Needs 2 stages of input regs for cascade (AREG/BREG)
+  (* use_dsp = "yes" *) logic signed [31:0] m2_a_pipe1, m2_a_pipe2, m2_b_pipe1, m2_b_pipe2;
+  (* use_dsp = "yes" *) logic signed [31:0] m3_a_pipe1, m3_a_pipe2, m3_b_pipe1, m3_b_pipe2;
+  (* use_dsp = "yes" *) logic signed [63:0] m2_mreg, m2_preg, m3_mreg, m3_preg;
+
+  always_ff @(posedge clk) begin
+    // Stage 1: AREG1/BREG1
+    m2_a_pipe1 <= d_alpha_logic;
+    m2_b_pipe1 <= w0_logic;
+    m3_a_pipe1 <= d_beta_logic;
+    m3_b_pipe1 <= w0_logic;
+
+    // Stage 2: AREG2/BREG2
+    m2_a_pipe2 <= m2_a_pipe1;
+    m2_b_pipe2 <= m2_b_pipe1;
+    m3_a_pipe2 <= m3_a_pipe1;
+    m3_b_pipe2 <= m3_b_pipe1;
+
+    // Stage 3: MREG
+    m2_mreg    <= m2_a_pipe2 * m2_b_pipe2;
+    m3_mreg    <= m3_a_pipe2 * m3_b_pipe2;
+
+    // Stage 4: PREG
+    m2_preg    <= m2_mreg;
+    m3_preg    <= m3_mreg;
+  end
+
+  // --- INTEGRATOR STAGE (Reset Required) ---
   always_ff @(posedge clk) begin
     if (!rst_n) begin
       alpha_acc <= '0;
       beta_acc  <= '0;
     end else begin
-      // Apply Saturation to Alpha Integrator
-      if (($signed(alpha_acc) > 0) && ($signed(d_alpha_ext * w0_dt_ext) > 0) && (next_alpha_acc < 0)) begin
-          alpha_acc <= POS_LIMIT; // Positive Overflow
-      end else if (($signed(alpha_acc) < 0) && ($signed(d_alpha_ext * w0_dt_ext) < 0) && (next_alpha_acc >= 0)) begin
-          alpha_acc <= NEG_LIMIT; // Negative Overflow
-      end else begin
-          alpha_acc <= next_alpha_acc;
-      end
-
-      // Apply Saturation to Beta Integrator
-      if (($signed(beta_acc) > 0) && ($signed(d_beta_ext * w0_dt_ext) > 0) && (next_beta_acc < 0)) begin
-          beta_acc <= POS_LIMIT; // Positive Overflow
-      end else if (($signed(beta_acc) < 0) && ($signed(d_beta_ext * w0_dt_ext) < 0) && (next_beta_acc >= 0)) begin
-          beta_acc <= NEG_LIMIT; // Negative Overflow
-      end else begin
-          beta_acc <= next_beta_acc;
-      end
+      alpha_acc <= alpha_acc + 48'(m2_preg);
+      beta_acc  <= beta_acc + 48'(m3_preg);
     end
   end
 
-  assign u_alpha = alpha_state;
-  assign u_beta  = beta_state;
-
-  // Synthesis linting cleanup (ignore unused input when adaptation disabled)
-  /* verilator lint_off UNUSEDSIGNAL */
-  logic [31:0] unused_phase_inc;
-  assign unused_phase_inc = phase_inc_in;
-  /* verilator lint_on UNUSEDSIGNAL */
+  assign u_alpha = alpha_acc[47:32];
+  assign u_beta  = beta_acc[47:32];
 
 endmodule

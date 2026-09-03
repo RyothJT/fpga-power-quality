@@ -373,48 +373,53 @@ module tb_system_top;
     $finish;
   end
 
-// -------------------------------------------------------------------------
-  // Waveform Dump Configuration (Optimized for Surfer Setup)
-  // -------------------------------------------------------------------------
+  // // -------------------------------------------------------------------------
+  // // Waveform Dump Configuration (Optimized for Surfer Setup)
+  // // -------------------------------------------------------------------------
+  // initial begin
+  //   $dumpfile("sim/gen/vcd/current.vcd");
+
+  //   $timeformat(-3, 2, " ms", 10);
+
+  //   // 1. System Control & Status
+  //   $dumpvars(0, tb_system_top.clk);
+  //   $dumpvars(0, tb_system_top.rst_n);
+  //   $dumpvars(0, tb_system_top.pll_locked);
+  //   $dumpvars(0, tb_system_top.center_freq);
+  //   $dumpvars(0, tb_system_top.current_phase);
+  //   $dumpvars(0, tb_system_top.jitter_en);
+  //   $dumpvars(0, tb_system_top.jitter_depth);
+
+  //   // 2. Primary Waveforms & PLL Tracking
+  //   $dumpvars(0, tb_system_top.v_out);
+  //   $dumpvars(0, tb_system_top.i_out);
+  //   $dumpvars(0, tb_system_top.v_alpha);
+  //   $dumpvars(0, tb_system_top.v_beta);
+  //   $dumpvars(0, tb_system_top.theta);
+  //   $dumpvars(0, tb_system_top.v_d);
+  //   $dumpvars(0, tb_system_top.v_q);
+  //   $dumpvars(0, tb_system_top.freq_out);
+
+  //   // 3. Power Engine & RMS Metrics
+  //   $dumpvars(0, tb_system_top.v_rms);
+  //   $dumpvars(0, tb_system_top.i_rms);
+  //   $dumpvars(0, tb_system_top.p_inst);
+  //   $dumpvars(0, tb_system_top.p_avg);
+  //   $dumpvars(0, tb_system_top.q_inst);
+  //   $dumpvars(0, tb_system_top.q_avg);
+
+  //   // 4. Harmonic Analysis (Including internal residual)
+  //   $dumpvars(0, tb_system_top.thd_val);
+  //   $dumpvars(0, tb_system_top.thd_12c);
+  //   $dumpvars(0, tb_system_top.uut.u_thd.v_harm_instant);
+    
+  //   // 5. UART Diagnostic Line
+  //   $dumpvars(0, tb_system_top.uart_tx_out);
+  // end
+
   initial begin
     $dumpfile("sim/gen/vcd/current.vcd");
-
-    $timeformat(-3, 2, " ms", 10);
-
-    // 1. System Control & Status
-    $dumpvars(0, tb_system_top.clk);
-    $dumpvars(0, tb_system_top.rst_n);
-    $dumpvars(0, tb_system_top.pll_locked);
-    $dumpvars(0, tb_system_top.center_freq);
-    $dumpvars(0, tb_system_top.current_phase);
-    $dumpvars(0, tb_system_top.jitter_en);
-    $dumpvars(0, tb_system_top.jitter_depth);
-
-    // 2. Primary Waveforms & PLL Tracking
-    $dumpvars(0, tb_system_top.v_out);
-    $dumpvars(0, tb_system_top.i_out);
-    $dumpvars(0, tb_system_top.v_alpha);
-    $dumpvars(0, tb_system_top.v_beta);
-    $dumpvars(0, tb_system_top.theta);
-    $dumpvars(0, tb_system_top.v_d);
-    $dumpvars(0, tb_system_top.v_q);
-    $dumpvars(0, tb_system_top.freq_out);
-
-    // 3. Power Engine & RMS Metrics
-    $dumpvars(0, tb_system_top.v_rms);
-    $dumpvars(0, tb_system_top.i_rms);
-    $dumpvars(0, tb_system_top.p_inst);
-    $dumpvars(0, tb_system_top.p_avg);
-    $dumpvars(0, tb_system_top.q_inst);
-    $dumpvars(0, tb_system_top.q_avg);
-
-    // 4. Harmonic Analysis (Including internal residual)
-    $dumpvars(0, tb_system_top.thd_val);
-    $dumpvars(0, tb_system_top.thd_12c);
-    $dumpvars(0, tb_system_top.uut.u_thd.v_harm_instant);
-    
-    // 5. UART Diagnostic Line
-    $dumpvars(0, tb_system_top.uart_tx_out);
+    $dumpvars(0, tb_system_top);
   end
 
 endmodule
