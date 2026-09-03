@@ -14,6 +14,7 @@ module sine_rom #(
   localparam int ROM_SIZE = 1 << ADDR_WIDTH;
   localparam int QUARTER_CYCLE = 1 << (ADDR_WIDTH - 2);
 
+  (* rom_style = "block" *)
   logic signed [DATA_WIDTH-1:0] rom [ROM_SIZE];
 
   initial begin

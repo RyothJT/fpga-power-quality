@@ -47,7 +47,7 @@ module dds_top #(
   localparam integer DIV_LIMIT = $rtoi(CLOCK_FREQ_HZ / TARGET_SAMPLE_RATE_HZ);
   reg [31:0] clk_div_cnt;
 
-  always_ff @(posedge clk or posedge rst) begin
+  always_ff @(posedge clk) begin
     if (rst) begin
       clk_div_cnt <= 32'd0;
       sample_en   <= 1'b0;
@@ -72,7 +72,7 @@ module dds_top #(
   reg  [31:0] phase_acc;
 
   // Ideal, un-jittered phase accumulator step guarantees 60.000 Hz center at 1 MSPS
-  always_ff @(posedge clk or posedge rst) begin
+  always_ff @(posedge clk) begin
     if (rst) begin
       phase_acc <= 32'd0;
     end else if (sample_en) begin
@@ -100,16 +100,32 @@ module dds_top #(
   // -------------------------------------------------------------------------
   // Address Generation
   // -------------------------------------------------------------------------
-  wire [11:0] v_addr_h1 = phase_jittered;
-  wire [11:0] i_addr_h1 = phase_jittered - {current_phase, 4'b0};
+  logic [11:0] v_addr_h1, v_addr_h3, v_addr_h5, v_addr_h7;
+  logic [11:0] i_addr_h1, i_addr_h3, i_addr_h5, i_addr_h7;
 
-  wire [11:0] v_addr_h3 = v_addr_h1 * 12'd3;
-  wire [11:0] v_addr_h5 = v_addr_h1 * 12'd5;
-  wire [11:0] v_addr_h7 = v_addr_h1 * 12'd7;
+  always_ff @(posedge clk) begin
+    if (rst) begin
+      v_addr_h1 <= '0;
+      v_addr_h3 <= '0;
+      v_addr_h5 <= '0;
+      v_addr_h7 <= '0;
+      i_addr_h1 <= '0;
+      i_addr_h3 <= '0;
+      i_addr_h5 <= '0;
+      i_addr_h7 <= '0;
+    end else begin
+      v_addr_h1 <= phase_acc[31:20] + $unsigned(phase_jitter);
+      i_addr_h1 <= (phase_acc[31:20] + $unsigned(phase_jitter)) - {current_phase, 4'b0};
 
-  wire [11:0] i_addr_h3 = i_addr_h1 * 12'd3;
-  wire [11:0] i_addr_h5 = i_addr_h1 * 12'd5;
-  wire [11:0] i_addr_h7 = i_addr_h1 * 12'd7;
+      v_addr_h3 <= v_addr_h1 * 12'd3;
+      v_addr_h5 <= v_addr_h1 * 12'd5;
+      v_addr_h7 <= v_addr_h1 * 12'd7;
+
+      i_addr_h3 <= i_addr_h1 * 12'd3;
+      i_addr_h5 <= i_addr_h1 * 12'd5;
+      i_addr_h7 <= i_addr_h1 * 12'd7;
+    end
+  end
 
   // -------------------------------------------------------------------------
   // ROM Lookups
@@ -247,7 +263,7 @@ module dds_top #(
   wire [ 3:0] shift_amt = (bit_precision < 5'd16) ? (5'd16 - bit_precision) : 4'd0;
   wire [15:0] precision_mask = 16'hFFFF << shift_amt;
 
-  assign v_out = v_sat & precision_mask;
-  assign i_out = i_sat & precision_mask;
+  assign v_out = rst ? '0 : v_sat & precision_mask;
+  assign i_out = rst ? '0 : i_sat & precision_mask;
 
 endmodule

@@ -105,6 +105,7 @@ module system_top #(
   ) u_dds (
       .clk          (clk),
       .rst          (dds_rst),
+      .sample_en    (),
       .measure_en   (measure_en),
       .center_freq  (center_freq),
       .bit_precision(bit_precision),

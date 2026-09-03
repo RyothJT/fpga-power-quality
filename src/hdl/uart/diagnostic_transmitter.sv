@@ -16,7 +16,7 @@ module diagnostic_transmitter #(
     // UART Interface
     output logic tx_start,
     output logic [7:0] tx_data,
-    input logic busy,
+    output logic busy,
     output logic RsTx
 );
 

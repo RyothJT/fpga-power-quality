@@ -37,6 +37,7 @@ module tb_sogi_pll_top;
   logic        [ 15:0] theta;
   logic        [15:-8] freq_out;
   logic                pll_locked;
+  logic        [ 31:0] phase_inc_smoothed;
 
   // Testbench Control Variables
   real                 tb_phase = 0.0;
