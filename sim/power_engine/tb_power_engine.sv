@@ -28,7 +28,7 @@ module tb_power_engine;
   always #(CLK_PERIOD_NS / 2.0) clk = ~clk;
 
   // Standard always block for floating-point stimulus updates
-  always @(posedge clk or negedge rst_n) begin
+  always @(posedge clk) begin
     if (!rst_n) begin
       phase_rad <= 0.0;
       v_alpha   <= '0;

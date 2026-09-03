@@ -40,7 +40,7 @@ module thd_analyzer #(
   // Subtract fundamental from raw signal before squaring.
   // This drastically reduces the ripple magnitude entering the filter.
   logic signed [15:0] v_harm_instant;
-  always_ff @(posedge clk or negedge rst_n) begin
+  always_ff @(posedge clk) begin
     if (!rst_n) begin
       v_harm_instant <= 16'd0;  // <--- MANDATORY: Initialize to 0
     end else if (measure_en) v_harm_instant <= v_in - v_alpha;
@@ -67,7 +67,7 @@ module thd_analyzer #(
   logic [32+K-1:0] ms_harm_acc;
   logic [32+K-1:0] ms_fund_acc;
 
-  always_ff @(posedge clk or negedge rst_n) begin
+  always_ff @(posedge clk) begin
     if (!rst_n) begin
       ms_harm_acc <= '0;
       ms_fund_acc <= '0;
@@ -89,7 +89,7 @@ module thd_analyzer #(
 
   assign ratio_num = (64'(ms_harm) << 24);
 
-  always_ff @(posedge clk or negedge rst_n) begin
+  always_ff @(posedge clk) begin
     if (!rst_n) begin
       thd_sq_q24 <= '0;
     end else if (pll_locked && ms_fund > 100) begin
@@ -122,7 +122,7 @@ module thd_analyzer #(
   // Detect positive-going zero crossing of fundamental sine (v_alpha)
   assign cycle_start = (v_alpha_prev < 0 && v_alpha >= 0);
 
-  always_ff @(posedge clk or negedge rst_n) begin
+  always_ff @(posedge clk) begin
     if (!rst_n) begin
       v_alpha_prev      <= 16'd0;
       cycle_cnt         <= 4'd0;

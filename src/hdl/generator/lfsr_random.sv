@@ -11,7 +11,7 @@ module lfsr_random (
   // Polynomial x^16 + x^14 + x^13 + x^11 + 1
   wire feedback = lfsr_reg[15] ^ lfsr_reg[13] ^ lfsr_reg[12] ^ lfsr_reg[10];
 
-  always @(posedge clk or posedge rst) begin
+  always @(posedge clk) begin
     if (rst) begin
       lfsr_reg <= 16'hACE1;  // Non-zero seed
     end else begin

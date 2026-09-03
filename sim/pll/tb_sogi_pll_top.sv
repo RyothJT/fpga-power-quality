@@ -61,7 +61,7 @@ module tb_sogi_pll_top;
   always #HALF_PERIOD_US clk = ~clk;
 
   // Monitor peak v_q magnitude
-  always_ff @(posedge clk or negedge rst_n) begin
+  always_ff @(posedge clk) begin
     if (!rst_n) begin
       max_vq_peak <= '0;
     end else begin
@@ -244,7 +244,7 @@ module tb_sogi_pll_top;
   // -------------------------------------------------------------------------
   logic [15:0] theta_prev;
   logic [63:0] last_time;
-  always @(posedge clk or negedge rst_n) begin
+  always @(posedge clk) begin
     if (!rst_n) begin
       theta_prev <= '0;
       last_time  <= '0;

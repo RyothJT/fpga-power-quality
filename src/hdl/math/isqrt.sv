@@ -25,7 +25,7 @@ module isqrt #(
   logic [ WIDTH+1:0] r[0:STAGES];
 
   // Everything is handled in one block to avoid Icarus 'multi-driven' errors
-  always_ff @(posedge clk or negedge rst_n) begin
+  always_ff @(posedge clk) begin
     if (!rst_n) begin
       for (int j = 0; j <= STAGES; j++) begin
         a[j] <= '0;

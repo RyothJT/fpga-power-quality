@@ -96,7 +96,7 @@ module tb_system_top;
   always #(CLK_HALF_PERIOD_NS) clk = ~clk;
 
   // Continuous Peak Magnitude Tracker for Phase Error (v_q)
-  always_ff @(posedge clk or negedge rst_n) begin
+  always_ff @(posedge clk) begin
     if (!rst_n) begin
       max_vq_peak <= '0;
     end else begin

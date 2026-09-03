@@ -32,7 +32,7 @@ module power_engine #(
   logic signed [31:0] q_prod_a, q_prod_b;
   logic signed [31:0] q_mult_a, q_mult_b;
 
-  always_ff @(posedge clk or negedge rst_n) begin
+  always_ff @(posedge clk) begin
     if (!rst_n) begin
       p_prod_a <= '0;
       p_prod_b <= '0;
@@ -58,7 +58,7 @@ module power_engine #(
   logic signed [16+K-1:0] p_iir_acc;
   logic signed [16+K-1:0] q_iir_acc;
 
-  always_ff @(posedge clk or negedge rst_n) begin
+  always_ff @(posedge clk) begin
     if (!rst_n) begin
       p_iir_acc <= '0;
       q_iir_acc <= '0;
@@ -102,7 +102,7 @@ module power_engine #(
   // Accumulators must be wide enough to hold 32 bits + K bits of filtering state
   logic [32+K-1:0] v_sq_acc, i_sq_acc;
 
-  always_ff @(posedge clk or negedge rst_n) begin
+  always_ff @(posedge clk) begin
     if (!rst_n) begin
       v_sq_acc <= '0;
       i_sq_acc <= '0;

@@ -71,7 +71,7 @@ module sogi_qsg #(
       assign w0_mult_full = $signed({32'b0, phase_inc_in}) * W0_SCALE_FACTOR;
       assign w0_dt_raw    = 32'(w0_mult_full >>> 16);
 
-      always_ff @(posedge clk or negedge rst_n) begin
+      always_ff @(posedge clk) begin
         if (!rst_n) begin
           w0_dt_iir_acc <= {FIXED_W0_DT, 16'b0};
         end else begin
@@ -138,7 +138,7 @@ module sogi_qsg #(
     next_beta_acc  = beta_acc  + 48'($signed(d_beta_ext * w0_dt_ext));
   end
 
-  always_ff @(posedge clk or negedge rst_n) begin
+  always_ff @(posedge clk) begin
     if (!rst_n) begin
       alpha_acc <= '0;
       beta_acc  <= '0;

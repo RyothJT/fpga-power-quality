@@ -75,7 +75,7 @@ module sogi_pll_top #(
   );
 
   logic signed [15:0] v_alpha_d1, v_beta_d1;
-  always_ff @(posedge clk or negedge rst_n) begin
+  always_ff @(posedge clk) begin
     if (!rst_n) begin
       v_alpha_d1 <= '0;
       v_beta_d1  <= '0;
@@ -136,7 +136,7 @@ module sogi_pll_top #(
   // Scale ki_pll proportionally so loop bandwidth remains fixed in Hz
   assign ki_scaled = ($signed(v_q) * $signed(ki_pll) * CLK_GAIN_SCALE) >>> 16;
 
-  always_ff @(posedge clk or negedge rst_n) begin
+  always_ff @(posedge clk) begin
     if (!rst_n) begin
       integrator_acc <= '0;
       phase_acc      <= '0;
@@ -166,7 +166,7 @@ module sogi_pll_top #(
   zone_e current_zone;
   logic  phase_reset_pulse;
 
-  always_ff @(posedge clk or negedge rst_n) begin
+  always_ff @(posedge clk) begin
     if (!rst_n) begin
       current_zone      <= LOWER_ZONE;
       phase_reset_pulse <= 1'b0;
@@ -195,7 +195,7 @@ module sogi_pll_top #(
   // Accumulator for period-averaging phase_inc
   logic [63:0] phase_inc_sum;
 
-  always_ff @(posedge clk or negedge rst_n) begin
+  always_ff @(posedge clk) begin
     if (!rst_n) begin
       clk_counter          <= '0;
       measured_period_clks <= NOMINAL_PERIOD_CLKS;
@@ -240,7 +240,7 @@ module sogi_pll_top #(
   // Approximate vector magnitude (|alpha| + |beta|) for grid presence check
   assign grid_amp_approx = v_alpha_abs + v_beta_abs;
 
-  always_ff @(posedge clk or negedge rst_n) begin
+  always_ff @(posedge clk) begin
     if (!rst_n) begin
       v_q_abs_sum  <= '0;
       v_q_avg      <= 16'hFFFF;
