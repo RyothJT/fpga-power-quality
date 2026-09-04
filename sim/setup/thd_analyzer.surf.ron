@@ -127,7 +127,7 @@
             ],
         ),
         displayed_items: {
-            (3): Variable((
+            (9): Variable((
                 variable_ref: (
                     path: (
                         strs: [
@@ -135,79 +135,13 @@
                         ],
                         id: Wellen((2)),
                     ),
-                    name: "GRID_FREQ_HZ",
-                    id: Wellen((6)),
+                    name: "phase_inc",
+                    id: Wellen((18)),
                     index: None,
                 ),
                 color: None,
                 background_color: None,
-                display_name: "GRID_FREQ_HZ",
-                display_name_type: Unique,
-                manual_name: None,
-                format: None,
-                field_formats: [],
-                height_scaling_factor: None,
-                analog: None,
-            )),
-            (6): Variable((
-                variable_ref: (
-                    path: (
-                        strs: [
-                            "tb_thd_analyzer",
-                        ],
-                        id: Wellen((2)),
-                    ),
-                    name: "amp_harm",
-                    id: Wellen((16)),
-                    index: None,
-                ),
-                color: None,
-                background_color: None,
-                display_name: "amp_harm",
-                display_name_type: Unique,
-                manual_name: None,
-                format: None,
-                field_formats: [],
-                height_scaling_factor: None,
-                analog: None,
-            )),
-            (10): Variable((
-                variable_ref: (
-                    path: (
-                        strs: [
-                            "tb_thd_analyzer",
-                        ],
-                        id: Wellen((2)),
-                    ),
-                    name: "rst_n",
-                    id: Wellen((11)),
-                    index: None,
-                ),
-                color: None,
-                background_color: None,
-                display_name: "rst_n",
-                display_name_type: Unique,
-                manual_name: None,
-                format: None,
-                field_formats: [],
-                height_scaling_factor: None,
-                analog: None,
-            )),
-            (2): Variable((
-                variable_ref: (
-                    path: (
-                        strs: [
-                            "tb_thd_analyzer",
-                        ],
-                        id: Wellen((2)),
-                    ),
-                    name: "CLK_PERIOD_NS",
-                    id: Wellen((3)),
-                    index: None,
-                ),
-                color: None,
-                background_color: None,
-                display_name: "CLK_PERIOD_NS",
+                display_name: "phase_inc",
                 display_name_type: Unique,
                 manual_name: None,
                 format: None,
@@ -242,6 +176,121 @@
                     ),
                 )),
             )),
+            (1): Placeholder((
+                variable_ref: (
+                    path: (
+                        strs: [
+                            "tb_thd_analyzer",
+                        ],
+                        id: Wellen((2)),
+                    ),
+                    name: "CLK_FREQ_HZ",
+                    id: r#None,
+                    index: None,
+                ),
+                color: None,
+                background_color: None,
+                display_name: "CLK_FREQ_HZ",
+                display_name_type: Unique,
+                manual_name: None,
+                format: None,
+                field_formats: [],
+                height_scaling_factor: None,
+                analog: None,
+            )),
+            (2): Variable((
+                variable_ref: (
+                    path: (
+                        strs: [
+                            "tb_thd_analyzer",
+                        ],
+                        id: Wellen((2)),
+                    ),
+                    name: "CLK_PERIOD_NS",
+                    id: Wellen((3)),
+                    index: None,
+                ),
+                color: None,
+                background_color: None,
+                display_name: "CLK_PERIOD_NS",
+                display_name_type: Unique,
+                manual_name: None,
+                format: None,
+                field_formats: [],
+                height_scaling_factor: None,
+                analog: None,
+            )),
+            (8): Variable((
+                variable_ref: (
+                    path: (
+                        strs: [
+                            "tb_thd_analyzer",
+                        ],
+                        id: Wellen((2)),
+                    ),
+                    name: "phase_acc",
+                    id: Wellen((17)),
+                    index: None,
+                ),
+                color: None,
+                background_color: None,
+                display_name: "phase_acc",
+                display_name_type: Unique,
+                manual_name: None,
+                format: None,
+                field_formats: [],
+                height_scaling_factor: None,
+                analog: None,
+            )),
+            (6): Variable((
+                variable_ref: (
+                    path: (
+                        strs: [
+                            "tb_thd_analyzer",
+                        ],
+                        id: Wellen((2)),
+                    ),
+                    name: "amp_harm",
+                    id: Wellen((16)),
+                    index: None,
+                ),
+                color: None,
+                background_color: None,
+                display_name: "amp_harm",
+                display_name_type: Unique,
+                manual_name: None,
+                format: None,
+                field_formats: [],
+                height_scaling_factor: None,
+                analog: None,
+            )),
+            (14): Variable((
+                variable_ref: (
+                    path: (
+                        strs: [
+                            "tb_thd_analyzer",
+                        ],
+                        id: Wellen((2)),
+                    ),
+                    name: "v_in",
+                    id: Wellen((14)),
+                    index: None,
+                ),
+                color: None,
+                background_color: None,
+                display_name: "v_in [15:0]",
+                display_name_type: Unique,
+                manual_name: None,
+                format: Some("Signed"),
+                field_formats: [],
+                height_scaling_factor: Some(2.0),
+                analog: Some((
+                    settings: (
+                        render_style: Step,
+                        y_axis_scale: Global,
+                    ),
+                )),
+            )),
             (5): Variable((
                 variable_ref: (
                     path: (
@@ -257,28 +306,6 @@
                 color: None,
                 background_color: None,
                 display_name: "amp_fund",
-                display_name_type: Unique,
-                manual_name: None,
-                format: None,
-                field_formats: [],
-                height_scaling_factor: None,
-                analog: None,
-            )),
-            (16): Variable((
-                variable_ref: (
-                    path: (
-                        strs: [
-                            "tb_thd_analyzer",
-                        ],
-                        id: Wellen((2)),
-                    ),
-                    name: "pll_locked",
-                    id: Wellen((10)),
-                    index: None,
-                ),
-                color: None,
-                background_color: None,
-                display_name: "pll_locked",
                 display_name_type: Unique,
                 manual_name: None,
                 format: None,
@@ -312,28 +339,6 @@
                         y_axis_scale: Global,
                     ),
                 )),
-            )),
-            (8): Variable((
-                variable_ref: (
-                    path: (
-                        strs: [
-                            "tb_thd_analyzer",
-                        ],
-                        id: Wellen((2)),
-                    ),
-                    name: "phase_acc",
-                    id: Wellen((17)),
-                    index: None,
-                ),
-                color: None,
-                background_color: None,
-                display_name: "phase_acc",
-                display_name_type: Unique,
-                manual_name: None,
-                format: None,
-                field_formats: [],
-                height_scaling_factor: None,
-                analog: None,
             )),
             (17): Variable((
                 variable_ref: (
@@ -380,9 +385,31 @@
                 analog: Some((
                     settings: (
                         render_style: Step,
-                        y_axis_scale: Global,
+                        y_axis_scale: Viewport,
                     ),
                 )),
+            )),
+            (10): Variable((
+                variable_ref: (
+                    path: (
+                        strs: [
+                            "tb_thd_analyzer",
+                        ],
+                        id: Wellen((2)),
+                    ),
+                    name: "rst_n",
+                    id: Wellen((11)),
+                    index: None,
+                ),
+                color: None,
+                background_color: None,
+                display_name: "rst_n",
+                display_name_type: Unique,
+                manual_name: None,
+                format: None,
+                field_formats: [],
+                height_scaling_factor: None,
+                analog: None,
             )),
             (4): Variable((
                 variable_ref: (
@@ -406,7 +433,7 @@
                 height_scaling_factor: None,
                 analog: None,
             )),
-            (1): Placeholder((
+            (3): Variable((
                 variable_ref: (
                     path: (
                         strs: [
@@ -414,13 +441,13 @@
                         ],
                         id: Wellen((2)),
                     ),
-                    name: "CLK_FREQ_HZ",
-                    id: r#None,
+                    name: "GRID_FREQ_HZ",
+                    id: Wellen((6)),
                     index: None,
                 ),
                 color: None,
                 background_color: None,
-                display_name: "CLK_FREQ_HZ",
+                display_name: "GRID_FREQ_HZ",
                 display_name_type: Unique,
                 manual_name: None,
                 format: None,
@@ -428,7 +455,7 @@
                 height_scaling_factor: None,
                 analog: None,
             )),
-            (9): Variable((
+            (16): Variable((
                 variable_ref: (
                     path: (
                         strs: [
@@ -436,53 +463,26 @@
                         ],
                         id: Wellen((2)),
                     ),
-                    name: "phase_inc",
-                    id: Wellen((18)),
+                    name: "pll_locked",
+                    id: Wellen((10)),
                     index: None,
                 ),
                 color: None,
                 background_color: None,
-                display_name: "phase_inc",
+                display_name: "pll_locked",
                 display_name_type: Unique,
                 manual_name: None,
                 format: None,
                 field_formats: [],
                 height_scaling_factor: None,
                 analog: None,
-            )),
-            (14): Variable((
-                variable_ref: (
-                    path: (
-                        strs: [
-                            "tb_thd_analyzer",
-                        ],
-                        id: Wellen((2)),
-                    ),
-                    name: "v_in",
-                    id: Wellen((14)),
-                    index: None,
-                ),
-                color: None,
-                background_color: None,
-                display_name: "v_in [15:0]",
-                display_name_type: Unique,
-                manual_name: None,
-                format: Some("Signed"),
-                field_formats: [],
-                height_scaling_factor: Some(2.0),
-                analog: Some((
-                    settings: (
-                        render_style: Step,
-                        y_axis_scale: Global,
-                    ),
-                )),
             )),
         },
         display_item_ref_counter: 17,
         viewports: [
             (
-                curr_left: (-0.11999999999999966),
-                curr_right: (1.2799999999999998),
+                curr_left: (0.3008291417421015),
+                curr_right: (0.5834842182643513),
                 target_left: (-0.2),
                 target_right: (1.2),
                 move_start_left: (-0.2),
@@ -492,8 +492,8 @@
             ),
         ],
         cursor: Some((1, [
-            1733911116,
-            153,
+            4202321984,
+            71,
         ])),
         markers: {},
         focused_item: Some((9)),
@@ -505,10 +505,7 @@
     )),
     drag_started: false,
     drag_source_idx: None,
-    drag_target_idx: Some((
-        before: (10),
-        level: 0,
-    )),
+    drag_target_idx: None,
     previous_waves: None,
     count: None,
     blacklisted_translators: [],

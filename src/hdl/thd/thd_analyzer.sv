@@ -4,12 +4,14 @@
  * Module: thd_analyzer
  * Description: Estimates THD by isolating harmonics in the time domain.
  *              Filter strength (K) is dynamically calculated based on CLOCK_FREQ_HZ.
- *              Outputs all high (16'ffff) when pll is unlocked.
+ *              Division is eliminated by normalizing harmonic power against nominal grid amplitude.
+ *              Outputs all high (16'hffff) when pll is unlocked.
  */
 module thd_analyzer #(
     parameter real CLOCK_FREQ_HZ = 100_000_000.0,
-    parameter real SAMPLE_RATE_HZ = CLOCK_FREQ_HZ / 100,
-    parameter real CUTOFF_FREQ_HZ = 10.0  // Aim for ~2Hz to heavily suppress 120Hz ripple
+    parameter real SAMPLE_RATE_HZ = CLOCK_FREQ_HZ / 100.0,
+    parameter real CUTOFF_FREQ_HZ = 10.0,  // Aim for ~2Hz to heavily suppress 120Hz ripple
+    parameter real GRID_PEAK_NOMINAL_Q15 = 32767.0  // Nominal peak amplitude in Q1.15
 ) (
     input logic clk,
     input logic rst_n,
@@ -28,11 +30,18 @@ module thd_analyzer #(
 );
 
   // -------------------------------------------------------------------------
-  // 1. Dynamic Filter Parameter Calculation
+  // 1. Dynamic Filter & Multiplicative Inverse Parameters
   // -------------------------------------------------------------------------
   // Formula: 2^K = F_clk / (2 * pi * F_cutoff)
   localparam real DIVISOR = SAMPLE_RATE_HZ / (2.0 * 3.14159265 * CUTOFF_FREQ_HZ);
   localparam int K = $clog2($rtoi(DIVISOR));
+
+  // Pre-calculated Mean Square nominal reference: MS_nominal = (V_peak^2) / 2
+  localparam real MS_NOMINAL = (GRID_PEAK_NOMINAL_Q15 * GRID_PEAK_NOMINAL_Q15) / 2;
+
+  // Q0.32 fixed-point representation of inverse nominal mean square: (2^24) / MS_NOMINAL
+  localparam real INV_MS_NOM_R = (2.0 ** 24) / MS_NOMINAL;
+  localparam logic [31:0] INV_MS_NOM_Q32 = 32'($rtoi(INV_MS_NOM_R * (2.0 ** 16)));
 
   // -------------------------------------------------------------------------
   // 2. Time-Domain Harmonic Isolation (Pipelined Stage 1 & 2)
@@ -48,9 +57,9 @@ module thd_analyzer #(
       v_harm_logic <= '0;
     end else begin
       // Stage 1: Capture Raw Inputs
-      v_in_reg <= v_in;
-      va_reg <= v_alpha;
-      vb_reg <= v_beta;
+      v_in_reg     <= v_in;
+      va_reg       <= v_alpha;
+      vb_reg       <= v_beta;
 
       // Stage 2: Calculate Residual (Logic outside DSP)
       v_harm_logic <= v_in_reg - va_reg;
@@ -117,45 +126,41 @@ module thd_analyzer #(
       ms_harm_acc <= '0;
       ms_fund_acc <= '0;
     end else if (measure_en) begin
-      // The leaky integrator now receives clean, registered power values
+      // The leaky integrator receives clean, registered power values
       ms_harm_acc <= ms_harm_acc + p_harm_inst_pipe - (ms_harm_acc >> K);
       ms_fund_acc <= ms_fund_acc + p_fund_inst_pipe - (ms_fund_acc >> K);
     end
   end
 
   // -------------------------------------------------------------------------
-  // 4. Ratio and Square Root (THD Calculation)
+  // 4. Division-Free Ratio Calculation & Square Root (THD Calculation)
   // -------------------------------------------------------------------------
 
-  // 1. Declare the extracted Mean Square values FIRST
-  wire [31:0] ms_harm;
-  wire [31:0] ms_fund;
-
+  logic [31:0] ms_harm, ms_fund;
   assign ms_harm = ms_harm_acc >> K;
   assign ms_fund = ms_fund_acc >> K;
 
-  // 2. Ratio Calculation
-  logic [ 63:0] ratio_num;
   logic [ 31:0] thd_sq_q24;
   logic [3:-12] root_out;
-
-  // Use concatenation {32'b0, ...} instead of 64'(...) for better Icarus support
-  assign ratio_num = {32'b0, ms_harm} << 24;
+  logic [ 63:0] thd_mult;
 
   always_ff @(posedge clk) begin
     if (!rst_n) begin
+      thd_mult   <= '0;
       thd_sq_q24 <= '0;
     end else if (measure_en) begin
-      // Only perform division when the fundamental magnitude is significant
       if (pll_locked && ms_fund > 100) begin
-        thd_sq_q24 <= 32'(ratio_num / ms_fund);
+        // Division replacement: multiply by Q0.32 inverse nominal constant
+        thd_mult   <= 64'(ms_harm) * 64'(INV_MS_NOM_Q32);
+        thd_sq_q24 <= thd_mult[47:16];
       end else begin
+        thd_mult   <= '0;
         thd_sq_q24 <= '0;
       end
     end
   end
 
-  // 3. Square Root Instance
+  // Square Root Instance
   isqrt #(
       .WIDTH(32)
   ) u_isqrt_thd (
@@ -205,7 +210,6 @@ module thd_analyzer #(
         if (cycle_start) begin
           if (cycle_cnt >= 11) begin
             // 12 Cycles reached: Calculate Mean and Reset
-            // Division by window_sample_cnt (approx 200,000 at 1MSPS)
             if (window_sample_cnt > 0) begin
               thd_12c       <= 16'(thd_accumulator / window_sample_cnt);
               update_strobe <= 1'b1;

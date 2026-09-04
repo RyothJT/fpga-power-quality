@@ -17,6 +17,8 @@ module tb_thd_analyzer;
   // We wait for a specific number of Grid Cycles to ensure visibility in waveforms.
   localparam int SETTLING_CYCLES = 10;
 
+  localparam int GRID_PEAK_NOMINAL_Q15 = 20000;
+
   // -------------------------------------------------------------------------
   // Signals
   // -------------------------------------------------------------------------
@@ -30,7 +32,7 @@ module tb_thd_analyzer;
   // Math variables for stimulus
   real phase_acc = 0.0;
   real phase_inc = (2.0 * 3.1415926535 * GRID_FREQ_HZ) / CLOCK_FREQ_HZ;
-  real amp_fund = 20000.0;
+  real amp_fund = GRID_PEAK_NOMINAL_Q15;
   real amp_harm = 0.0;
 
   // -------------------------------------------------------------------------
@@ -39,7 +41,8 @@ module tb_thd_analyzer;
   thd_analyzer #(
       .CLOCK_FREQ_HZ (CLOCK_FREQ_HZ),
       .SAMPLE_RATE_HZ(CLOCK_FREQ_HZ),
-      .CUTOFF_FREQ_HZ(CUTOFF_FREQ_HZ)
+      .CUTOFF_FREQ_HZ(CUTOFF_FREQ_HZ),
+      .GRID_PEAK_NOMINAL_Q15(GRID_PEAK_NOMINAL_Q15)
   ) uut (
       .clk       (clk),
       .rst_n     (rst_n),
