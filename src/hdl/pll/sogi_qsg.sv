@@ -19,14 +19,14 @@ module sogi_qsg #(
   // 1. Frequency Adaptation (Strict DSP Pipeline)
   // -------------------------------------------------------------------------
   localparam real M_PI = 3.14159265358979323846;
-  localparam real NOM_PHASE_INC_R = (CENTER_FREQ_HZ * 4294967296.0) / CLOCK_FREQ_HZ;
+  localparam real NOM_PHASE_INC_R = (CENTER_FREQ_HZ * $pow(2, 32)) / CLOCK_FREQ_HZ;
   localparam logic signed [31:0] FIXED_W0_DT = 32'($rtoi(2.0 * M_PI * NOM_PHASE_INC_R));
 
   logic signed [31:0] w0_dt_dynamic;
 
   generate
     if (ENABLE_FREQ_ADAPT) begin : g_freq_adapt
-      localparam logic signed [17:0] W0_FACTOR_SMALL = 18'($rtoi(2.0 * M_PI * 8192.0));
+      localparam logic signed [17:0] W0_FACTOR_SMALL = 18'($rtoi(2.0 * M_PI * $pow(2, 13)));
       logic signed [31:0] p_inc_pipe1, p_inc_pipe2;
       logic signed [49:0] w0_mreg, w0_preg;
       logic signed [31:0] w0_dt_raw;
@@ -54,20 +54,18 @@ module sogi_qsg #(
   endgenerate
 
   // -------------------------------------------------------------------------
-  // 2. SOGI Core Integrators (Strict 10-Stage Hardware Pipeline)
+  // 2. SOGI Core Integrators (Pipelined for 100MHz Timing Closure)
   // -------------------------------------------------------------------------
   logic signed [47:0] alpha_acc, beta_acc;
   logic signed [15:0] alpha_state, beta_state;
   assign alpha_state = alpha_acc[47:32];
   assign beta_state  = beta_acc[47:32];
 
-  // --- FABRIC STAGE (Logic with Resets) ---
+  // --- Stage 1-2: Logic & Sampling ---
   logic signed [15:0] err_logic;
   logic signed [31:0] d_alpha_logic, d_beta_logic;
   logic signed [31:0] w0_logic;
 
-  // --- DSP STAGE 1: Multiplier 1 (k * err) ---
-  // NO RESET ALLOWED. Pure data pipeline for MREG/PREG inference.
   (* use_dsp = "yes" *) logic signed [15:0] m1_a, m1_b;
   (* use_dsp = "yes" *) logic signed [31:0] m1_mreg, m1_preg;
 
@@ -88,46 +86,53 @@ module sogi_qsg #(
   always_ff @(posedge clk) begin
     m1_a    <= err_logic;
     m1_b    <= k_sogi;
-    m1_mreg <= m1_a * m1_b; // Hardware MREG
-    m1_preg <= m1_mreg;     // Hardware PREG
+    m1_mreg <= m1_a * m1_b;
+    m1_preg <= m1_mreg;
   end
 
-  // --- DSP STAGE 2: Multipliers 2 & 3 (d * w0) ---
-  // 32x32 multiply: Needs 2 stages of input regs for cascade (AREG/BREG)
+  // --- Stage 5-8: Multipliers 2 & 3 (d * w0) ---
   (* use_dsp = "yes" *) logic signed [31:0] m2_a_pipe1, m2_a_pipe2, m2_b_pipe1, m2_b_pipe2;
   (* use_dsp = "yes" *) logic signed [31:0] m3_a_pipe1, m3_a_pipe2, m3_b_pipe1, m3_b_pipe2;
   (* use_dsp = "yes" *) logic signed [63:0] m2_mreg, m2_preg, m3_mreg, m3_preg;
 
+  // NEW: Transition registers to break the DSP-to-DSP carry chain (The Slack Fix)
+  logic signed [47:0] m2_acc_in, m3_acc_in;
+
   always_ff @(posedge clk) begin
-    // Stage 1: AREG1/BREG1
+    // Multiplier Inputs
     m2_a_pipe1 <= d_alpha_logic;
     m2_b_pipe1 <= w0_logic;
     m3_a_pipe1 <= d_beta_logic;
     m3_b_pipe1 <= w0_logic;
 
-    // Stage 2: AREG2/BREG2
     m2_a_pipe2 <= m2_a_pipe1;
     m2_b_pipe2 <= m2_b_pipe1;
     m3_a_pipe2 <= m3_a_pipe1;
     m3_b_pipe2 <= m3_b_pipe1;
 
-    // Stage 3: MREG
+    // Multiplier Core
     m2_mreg    <= m2_a_pipe2 * m2_b_pipe2;
     m3_mreg    <= m3_a_pipe2 * m3_b_pipe2;
 
-    // Stage 4: PREG
+    // Multiplier Output (PREG)
     m2_preg    <= m2_mreg;
     m3_preg    <= m3_mreg;
+
+    // --- NEW STAGE: Final Routing Register ---
+    // This resolves the -0.086ns violation by isolating the multiplier 
+    // from the accumulator.
+    m2_acc_in  <= 48'(m2_preg);
+    m3_acc_in  <= 48'(m3_preg);
   end
 
-  // --- INTEGRATOR STAGE (Reset Required) ---
+  // --- INTEGRATOR STAGE (Final Accumulation) ---
   always_ff @(posedge clk) begin
     if (!rst_n) begin
       alpha_acc <= '0;
       beta_acc  <= '0;
     end else begin
-      alpha_acc <= alpha_acc + 48'(m2_preg);
-      beta_acc  <= beta_acc + 48'(m3_preg);
+      alpha_acc <= alpha_acc + m2_acc_in;
+      beta_acc  <= beta_acc + m3_acc_in;
     end
   end
 
