@@ -30,17 +30,20 @@ module sogi_pll_top #(
   // -------------------------------------------------------------------------
   // Local Parameters & Derived Math
   // -------------------------------------------------------------------------
-  localparam real NOM_PHASE_INC_R = (CENTER_FREQ_HZ * 4294967296.0) / CLOCK_FREQ_HZ;
+  localparam real NOM_PHASE_INC_R = (CENTER_FREQ_HZ * $pow(2, 32) / CLOCK_FREQ_HZ);
   localparam logic [31:0] NOMINAL_PHASE_INC = 32'($rtoi(NOM_PHASE_INC_R));
 
   localparam logic [31:0] NOMINAL_PERIOD_CLKS = 32'($rtoi(CLOCK_FREQ_HZ / CENTER_FREQ_HZ));
-  localparam logic [63:0] FREQ_SCALE = CLOCK_FREQ_HZ * 256.0;
+  localparam logic [63:0] FREQ_SCALE = CLOCK_FREQ_HZ * $pow(2, 8);
 
   // Allowed period variation window (+/- 15% of target frequency)
   localparam logic [31:0] MIN_PERIOD_CLKS = 32'($rtoi(NOMINAL_PERIOD_CLKS * 0.85));
   localparam logic [31:0] MAX_PERIOD_CLKS = 32'($rtoi(NOMINAL_PERIOD_CLKS * 1.15));
 
-  logic [31:0] phase_inc;
+  // Scaling constant to convert 32-bit phase_inc to Q16.8 frequency:
+  localparam real FREQ_SCALE_FACTOR = (CLOCK_FREQ_HZ * $pow(2, 8)) / $pow(2, 32);
+  localparam logic [31:0] FREQ_SCALE_Q16 = 32'($rtoi(FREQ_SCALE_FACTOR * $pow(2, 16)));
+
 
   // -------------------------------------------------------------------------
   // 1. SOGI-QSG Sub-module Instance (Generates v_alpha & v_beta)
@@ -61,6 +64,7 @@ module sogi_pll_top #(
   // -------------------------------------------------------------------------
   // 2. Closed-Loop NCO & Sine Lookup
   // -------------------------------------------------------------------------
+
   logic [31:0] phase_acc;
   logic signed [15:0] sin_val, cos_val;
 
@@ -74,17 +78,6 @@ module sogi_pll_top #(
       .cos_out(cos_val)
   );
 
-  logic signed [15:0] v_alpha_d1, v_beta_d1;
-  always_ff @(posedge clk) begin
-    if (!rst_n) begin
-      v_alpha_d1 <= '0;
-      v_beta_d1  <= '0;
-    end else begin
-      v_alpha_d1 <= v_alpha;
-      v_beta_d1  <= v_beta;
-    end
-  end
-
   // -------------------------------------------------------------------------
   // 3. Park Transform (Pipelined Stages 1, 2, & 3)
   // -------------------------------------------------------------------------
@@ -95,8 +88,8 @@ module sogi_pll_top #(
   logic signed [15:0] sin_pipe, cos_pipe;
 
   always_ff @(posedge clk) begin
-    va_pipe  <= v_alpha_d1;
-    vb_pipe  <= v_beta_d1;
+    va_pipe  <= v_alpha;
+    vb_pipe  <= v_beta;
     sin_pipe <= sin_val;
     cos_pipe <= cos_val;
   end
@@ -190,6 +183,8 @@ module sogi_pll_top #(
   // 5. Output & Phase-Reset Frequency Measurement
   // -------------------------------------------------------------------------
 
+  logic [31:0] phase_inc;
+
   // NCO Angle Output
   assign theta = phase_acc[31:16];
 
@@ -229,67 +224,100 @@ module sogi_pll_top #(
     end
   end
 
-  // Period Counter and Phase Increment Smoother
-  logic [31:0] clk_counter;
-  logic [31:0] measured_period_clks;
-  logic [63:0] phase_inc_sum;
+  localparam real NOM_CYCLES_PER_PERIOD = CLOCK_FREQ_HZ / CENTER_FREQ_HZ;
+  localparam int PHASE_EMA_SHIFT = $rtoi($clog2(NOM_CYCLES_PER_PERIOD));  // e.g. 21 for 100MHz/60Hz
+
+  // -------------------------------------------------------------------------
+  // Continuous Phase Increment Smoother (Division-Free EMA Filter)
+  // -------------------------------------------------------------------------
+  // Extended precision accumulator depth dynamically matches PHASE_EMA_SHIFT + 32-bit input
+  logic signed [32 + PHASE_EMA_SHIFT - 1 : 0] phase_inc_filter_acc;
 
   always_ff @(posedge clk) begin
     if (!rst_n) begin
-      clk_counter          <= '0;
-      measured_period_clks <= NOMINAL_PERIOD_CLKS;
-      phase_inc_sum        <= '0;
+      phase_inc_filter_acc <= {NOMINAL_PHASE_INC, {(PHASE_EMA_SHIFT) {1'b0}}};
       phase_inc_smoothed   <= NOMINAL_PHASE_INC;
     end else begin
-      clk_counter   <= clk_counter + 1'b1;
-      // Accumulate the instantaneous phase_inc for averaging
-      phase_inc_sum <= phase_inc_sum + 64'(phase_inc);
+      // Update continuous accumulator on every clock cycle
+      phase_inc_filter_acc <= phase_inc_filter_acc + $signed(
+          {{(PHASE_EMA_SHIFT) {1'b0}}, phase_inc}
+      ) - $signed(
+          phase_inc_filter_acc >>> PHASE_EMA_SHIFT
+      );
 
-      if (phase_reset_pulse) begin
-        measured_period_clks <= clk_counter;
-        clk_counter          <= '0;
-
-        // Average phase_inc over the completed 60 Hz fundamental period.
-        // This provides a stable frequency bus for the Current QSG.
-        if (clk_counter > 0) begin
-          phase_inc_smoothed <= 32'(phase_inc_sum / 64'(clk_counter));
-        end
-        phase_inc_sum <= '0;
-      end
+      // Extract high 32 bits as smoothed phase increment
+      phase_inc_smoothed <= 32'(phase_inc_filter_acc >>> PHASE_EMA_SHIFT);
     end
   end
 
-  // Final Frequency Calculation (Q16.8 format)
-  logic [63:0] freq_calc;
-  assign freq_calc = FREQ_SCALE / 64'(measured_period_clks);
-  assign freq_out  = freq_calc[23:0];
+  logic [63:0] freq_calc_mult;
+
+  always_ff @(posedge clk) begin
+    if (!rst_n) begin
+      freq_out <= 24'd0;
+    end else begin
+      freq_calc_mult <= 64'(phase_inc_smoothed) * 64'(FREQ_SCALE_Q16);
+      freq_out       <= freq_calc_mult[39:16];
+    end
+  end
 
   // -------------------------------------------------------------------------
   // 6. Robust Lock-Detector with Fast Instant-Unlock & Synchronous Re-Lock
   // -------------------------------------------------------------------------
-  logic signed [15:0] v_q_abs, v_alpha_abs, v_beta_abs;
-  logic [47:0] v_q_abs_sum;
-  logic [15:0] v_q_avg;
-  logic [15:0] grid_amp_approx;
-  logic [ 7:0] lock_counter;
-  logic        amp_valid;
-  logic        freq_valid;
+  // Compute EMA parameterization to match 1-period time constant (1 / CENTER_FREQ_HZ)
+  localparam real PERIOD_CYCLES_R = CLOCK_FREQ_HZ / CENTER_FREQ_HZ;
+  localparam int VQ_EMA_SHIFT = $rtoi($clog2(PERIOD_CYCLES_R));  // e.g. 21 for 100MHz/60Hz
 
-  assign v_q_abs         = (v_q < 0) ? -v_q : -(-v_q);  // Safe absolute value calculation
+  logic        [31:0] clk_counter;
+  logic        [31:0] measured_period_clks;
+
+  logic signed [15:0] v_q_abs;
+  logic signed [15:0] v_alpha_abs;
+  logic signed [15:0] v_beta_abs;
+  logic        [15:0] v_q_avg;
+  logic        [15:0] grid_amp_approx;
+  logic        [ 7:0] lock_counter;
+  logic               amp_valid;
+  logic               freq_valid;
+
+  assign v_q_abs         = (v_q < 0) ? -v_q : v_q;
   assign v_alpha_abs     = (v_alpha < 0) ? -v_alpha : v_alpha;
   assign v_beta_abs      = (v_beta < 0) ? -v_beta : v_beta;
 
   // Approximate vector magnitude (|alpha| + |beta|) for grid presence check
   assign grid_amp_approx = v_alpha_abs + v_beta_abs;
 
+  // Continuous low-pass filter accumulator for v_q_abs
+  // Bit depth needs room for 16-bit input + VQ_EMA_SHIFT
+  logic [16 + VQ_EMA_SHIFT - 1 : 0] v_q_filter_acc;
+
+  // Continuous EMA filter replacing the period accumulator & division
   always_ff @(posedge clk) begin
     if (!rst_n) begin
-      v_q_abs_sum  <= '0;
-      v_q_avg      <= 16'hFFFF;
-      lock_counter <= '0;
-      pll_locked   <= 1'b0;
+      v_q_filter_acc <= '1;  // Initialize high so lock isn't falsely asserted on startup
+      v_q_avg        <= 16'hFFFF;
     end else begin
-      v_q_abs_sum <= v_q_abs_sum + 48'(v_q_abs);
+      v_q_filter_acc <= v_q_filter_acc 
+                      + { {(VQ_EMA_SHIFT){1'b0}}, v_q_abs } 
+                      - (v_q_filter_acc >> VQ_EMA_SHIFT);
+
+      v_q_avg <= 16'(v_q_filter_acc >> VQ_EMA_SHIFT);
+    end
+  end
+
+  always_ff @(posedge clk) begin
+    if (!rst_n) begin
+      lock_counter         <= '0;
+      pll_locked           <= 1'b0;
+      clk_counter          <= '0;
+      measured_period_clks <= NOMINAL_PERIOD_CLKS;
+    end else begin
+      clk_counter <= clk_counter + 1'b1;
+
+      if (phase_reset_pulse) begin
+        measured_period_clks <= clk_counter;
+        clk_counter          <= '0;
+      end
 
       // ---------------------------------------------------------------------
       // FAST UNLOCK PATH (Evaluated Every Clock Cycle)
@@ -307,11 +335,6 @@ module sogi_pll_top #(
       // SYNCHRONOUS RE-LOCK PATH (Evaluated on Fundamental Period Rollover)
       // ---------------------------------------------------------------------
       if (phase_reset_pulse) begin
-        if (measured_period_clks > 0) begin
-          v_q_avg <= 16'(v_q_abs_sum / 48'(measured_period_clks));
-        end
-        v_q_abs_sum <= '0;
-
         amp_valid = (grid_amp_approx >= MIN_AMP_THRESH);
         freq_valid = (measured_period_clks >= MIN_PERIOD_CLKS) && 
                      (measured_period_clks <= MAX_PERIOD_CLKS);
