@@ -153,31 +153,35 @@ module thd_analyzer #(
       div_bit_cnt_norm  <= 6'd0;
       div_busy_norm     <= 1'b0;
       thd_sq_q24        <= 32'd0;
-    end else if (measure_en) begin
-      if (ms_fund > 32'd100) begin
-        if (!div_busy_norm) begin
-          // Start a new 32-bit Q24 division cycle
-          div_num_norm      <= 64'(ms_harm) << 24;  // Align to Q24
-          div_den_norm      <= ms_fund;
-          div_quotient_norm <= 32'd0;
-          div_bit_cnt_norm  <= 6'd32;
-          div_busy_norm     <= 1'b1;
-        end else begin
-          // Step through non-blocking division
-          if (div_bit_cnt_norm > 0) begin
-            div_bit_cnt_norm <= div_bit_cnt_norm - 1'b1;
-            if (div_num_norm >= (64'(div_den_norm) << (div_bit_cnt_norm - 1))) begin
-              div_num_norm      <= div_num_norm - (64'(div_den_norm) << (div_bit_cnt_norm - 1));
-              div_quotient_norm <= div_quotient_norm | (32'd1 << (div_bit_cnt_norm - 1));
-            end
+    end else begin
+      if (!div_busy_norm) begin
+        // Idle state: wait for a trigger pulse (measure_en / sample_en)
+        if (measure_en) begin
+          if (ms_fund > 32'd100) begin
+            // Start a new 32-bit Q24 division cycle
+            div_num_norm      <= 64'(ms_harm) << 24;  // Align to Q24
+            div_den_norm      <= ms_fund;
+            div_quotient_norm <= 32'd0;
+            div_bit_cnt_norm  <= 6'd32;
+            div_busy_norm     <= 1'b1;
           end else begin
-            div_busy_norm <= 1'b0;
-            thd_sq_q24    <= div_quotient_norm;
+            // Denominator too small, clear result immediately
+            thd_sq_q24 <= 32'd0;
           end
         end
       end else begin
-        div_busy_norm <= 1'b0;
-        thd_sq_q24    <= 32'd0;
+        // Division in progress: runs independently on every clock edge
+        if (div_bit_cnt_norm > 0) begin
+          div_bit_cnt_norm <= div_bit_cnt_norm - 1'b1;
+          if (div_num_norm >= (64'(div_den_norm) << (div_bit_cnt_norm - 1))) begin
+            div_num_norm      <= div_num_norm - (64'(div_den_norm) << (div_bit_cnt_norm - 1));
+            div_quotient_norm <= div_quotient_norm | (32'd1 << (div_bit_cnt_norm - 1));
+          end
+        end else begin
+          // Division finished: store quotient and go back to idle
+          div_busy_norm <= 1'b0;
+          thd_sq_q24    <= div_quotient_norm;
+        end
       end
     end
   end
@@ -284,3 +288,4 @@ module thd_analyzer #(
   end
 
 endmodule
+
