@@ -18,8 +18,7 @@ A high-performance Verilog implementation of a Hardware-in-the-Loop (HIL) AC pow
 - *XADC Interface:* Integration hook for the Xilinx XADC IP block (~xadc_interface.sv~) to map external analog inputs or internal digital streams into signed 16-bit Q1.15 fixed-point vectors.
 
 ** Core Algorithmic Modules
-- *SOGI-PLL Engine:* Integrated Frequency-Adaptive SOGI (=sogi_pll_top.sv=) with internal sine/cosine lookup (=sogi_sine_rom=), Park Transformation, and PI loop filtering to track orthogonal $\alpha/\beta$ components, grid phase angle (=theta=), and measured frequency (=freq_out=).
-- *Real-Time Power Calculation Engine:* Computes Instantaneous Active Power (P = V \cdot I), Reactive Power (Q), and real-time RMS metrics using fixed-point arithmetic.
+- *SOGI-PLL Engine:* Integrated Frequency-Adaptive SOGI (=sogi_pll_top.sv=) with internal sine/cosine lookup (=sogi_sine_rom=), Park Transformation, and PI loop filtering to track orthogonal $\alpha/\beta$ components, grid phase angle (=theta=), and measured frequency (=freq_out=). - *Real-Time Power Calculation Engine:* Computes Instantaneous Active Power (P = V \cdot I), Reactive Power (Q), and real-time RMS metrics using fixed-point arithmetic.
 - *Harmonic Analysis Engine:* Evaluates Total Harmonic Distortion (THD) across sampled waveforms via Goertzel or FFT filtering (~thd_analyzer.sv~).
 
 ** Verification & Tooling Workflow
@@ -31,20 +30,28 @@ A high-performance Verilog implementation of a Hardware-in-the-Loop (HIL) AC pow
 
 #+BEGIN_EXAMPLE
 .
-├── README.org        # Project overview, feature specs, and TODO tracking
-├── run_sim.py        # Python runner script for compiling and executing Verilog simulations
-├── sim               # Simulation testbenches and generated outputs
-│   ├── dds           # Testbenches for the DDS waveform generator
-│   ├── gen           # Output binaries, logs, and VCD waveform dumps (ignored by Git)
-│   ├── pll           # Testbenches for SOGI-PLL grid synchronization engine
-│   ├── power_engine  # Testbenches for instantaneous active/reactive power calculations
-│   ├── thd           # Testbenches for Total Harmonic Distortion estimator
-│   └── top           # Integration testbenches for the full system
-├── src               # Project source code
-│   ├── hdl           # Synthesizable Verilog source files (modules)
-│   └── ip            # Xilinx IP core configurations and block designs
-├── syn               # Vivado synthesis, implementation, and bitstream build output directory
-└── tcl               # Automation TCL scripts for project creation and Vivado builds
+├── README.org
+├── remote_build.py
+├── run_sim.py
+├── sim
+│   ├── dds
+│   ├── gen
+│   ├── pll
+│   ├── power_engine
+│   ├── setup
+│   ├── thd
+│   └── top
+├── src
+│   ├── hdl
+│   └── ip
+├── syn
+│   ├── gen
+│   ├── logs
+│   ├── tcl
+│   └── xdc
+├── tcl
+│   └── gen_xadc.tcl
+└── view_telemtry.py
 #+END_EXAMPLE
 
 * Getting Started
@@ -65,7 +72,7 @@ python3 run_sim.py tb_dds_top
 
 * Phase 1 Execution Roadmap & TODOs
 
-** Digital Signal Generation (Internal Grid Model) [10/10]
+** Digital Signal Generation (Internal Grid Model) [10/11]
  - [X] Implement fundamental 60 Hz DDS sine wave lookup table (~sine_rom.sv~).
  - [X] Add dynamic Q1.8 voltage sag scaling logic into ~dds_top.sv~.
  - [X] Integrate LFSR pseudo-random phase jitter injection (~lfsr_random.sv~).
@@ -77,20 +84,24 @@ python3 run_sim.py tb_dds_top
  - [X] Combine and parameterize sine ROMs for DDS and PLL.
  - [X] Pipeline to reduce timing issues in synthesis
 
-** Signal Conditioning & Sampling Interface [0/6]
- - [ ] Instantiate and configure Xilinx XADC IP block for sampling dual analog inputs or streaming internal digital vectors.
- - [ ] Write XADC interface module (~xadc_interface.sv~) to convert raw XADC samples into 16-bit Q1.15 fixed-point V and I data buses.
- - [ ] Test xadc sampling in separate top synthesis
- - [ ] Test xadc sampling on arbitrary signal generator
- - [ ] Integrate xadc into the system and verify functionality
+** Signal Conditioning & Sampling Interface [5/6]
+ - [X] Instantiate and configure Xilinx XADC IP block for sampling dual analog inputs or streaming internal digital vectors.
+ - [X] Write XADC interface module (~xadc_interface.sv~) to convert raw XADC samples into 16-bit Q1.15 fixed-point V and I data buses.
+ - [X] Test xadc sampling in separate top synthesis
+ - [X] Test xadc sampling on arbitrary signal generator
+ - [X] Integrate xadc into the system and verify functionality
  - [ ] Test xadc sampling on stepped down mains voltage
 
-** Core Algorithmic Modules (HDL) [5/5]
+** Core Algorithmic Modules (HDL) [5/7]
  - [X] Implement PI Loop Filter (~sogi_pll_top.sv~) for continuous phase/frequency error tracking (57 Hz \le f \le 63 Hz).
  - [X] Implement ~power_engine.sv~ using fixed-point multipliers to compute Instantaneous Active Power (P = V \cdot I) and Reactive Power (Q).
  - [X] Implement moving average / IIR filter for real-time V_{RMS} and I_{RMS} calculation.
  - [X] Implement Total Harmonic Distortion (THD) estimator block (~thd_analyzer.sv~).
  - [X] Pipeline to reduce timing issues in synthesis
+ - [ ] Fix statistics when input waveform is offset from perfect 0.5V
+   - [ ] Fix THD
+   - [ ] Fix frequency drift
+ - [ ] Make PLL lock always recoverable by resetting dynamics after unlocking
 
 ** Verification & Hardware Testing [0/2]
  - [ ] Write Vivado testbenches validating PLL lock speed during transient sags and phase jumps.

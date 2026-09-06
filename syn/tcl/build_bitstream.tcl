@@ -1,10 +1,18 @@
+# syn/tcl/build_bitstream.tcl
+
 # 1. Setup Project
 set outputDir ./syn/gen/build_output
 file mkdir $outputDir
 create_project -force fpga_power_quality ./syn/gen/project -part xc7a35tcpg236-1
 
+source ./tcl/gen_xadc.tcl
+
 # 2. Add Source Files (Robust Globbing)
 add_files [glob -nocomplain ./src/hdl/**/*.sv ./src/hdl/**/*.v]
+
+# --- NEW: Add the generated IP .xci file explicitly ---
+# add_files [get_files ./src/ip/xadc_wiz_0/xadc_wiz_0.xci]
+
 add_files -fileset constrs_1 ./syn/xdc/basys3.xdc
 
 # 3. Set Top Module
@@ -12,6 +20,7 @@ set_property top basys3_top [current_fileset]
 update_compile_order -fileset sources_1
 
 # 4. Run Synthesis
+# Note: synth_design will now automatically trigger IP synthesis for xadc_wiz_0
 synth_design -top basys3_top -part xc7a35tcpg236-1
 write_checkpoint -force $outputDir/post_synth.dcp
 

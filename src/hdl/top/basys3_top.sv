@@ -1,83 +1,128 @@
+`timescale 1ns / 1ps
+
 module basys3_top (
     input  logic        clk,
     input  logic        btnC,  // Reset (Center Button)
     input  logic [15:0] sw,    // 16 physical switches
     output logic [15:0] led,   // 16 physical LEDs
-    output logic        RsTx   // UART TX Pin
+    output logic        RsTx,  // UART TX Pin
+
+    // Physical Analog Pins (Must be in port list to map to XDC)
+    input logic v_p,
+    v_n,  // XA1 (VAUX6)
+    input logic i_p,
+    i_n  // XA2 (VAUX14)
 );
 
   // -------------------------------------------------------------------------
-  // 1. Control Signals (Required for .* connection)
+  // 1. Internal Buses & Control
   // -------------------------------------------------------------------------
-  logic [23:0] center_freq;  // 60.0 Hz
-  logic [ 4:0] bit_precision = 5'd12;
+  logic [23:0] center_freq;
   logic [14:0] v_peak;
-  logic [14:0] i_peak = 15'h3FFF;
-  logic        jitter_en;
-  logic [ 3:0] jitter_depth = 4'd4;
-  logic [ 7:0] current_phase = 8'd32;  // ~45 deg lag
+  logic [15:0] v_in, i_in;
+  logic measure_en;
 
-  // Harmonic Scales (Q0.8)
-  logic [7:0] v_h3_scale, v_h5_scale, v_h7_scale;
-  logic [7:0] i_h3_scale, i_h5_scale, i_h7_scale;
+  // DDS HIL Wires
+  logic [15:0] v_hil, i_hil;
+  logic measure_hil;
 
-  // SOGI Control Gains
-  logic signed [15:0] k_sogi = 16'sd8192;
-  logic signed [15:0] kp_pll = 16'sd120;
-  logic signed [15:0] ki_pll = 16'sd40;
+  // XADC Real Wires
+  logic [15:0] v_xadc, i_xadc;
+  logic measure_xadc;
 
-  // -------------------------------------------------------------------------
-  // 2. Telemetry Wires (Required for .* connection)
-  // -------------------------------------------------------------------------
-  logic signed [15:0] v_out, i_out;
-  logic signed [15:0] v_alpha, v_beta, v_d, v_q;
-  logic [ 15:0] theta;
-  logic [15:-8] freq_out;
-  logic         pll_locked;
-
-  logic signed [15:0] i_alpha, i_beta;
-  logic signed [15:0] p_inst, q_inst, p_avg, q_avg;
-  logic [15:0] v_rms, i_rms;
-  logic [3:-12] thd_val, thd_12c;
-
-  logic uart_busy;
+  // Debug Wires
+  logic [11:0] xadc_v_raw, xadc_i_raw;
+  logic adc_activity;
 
   // -------------------------------------------------------------------------
-  // 3. Physical Mappings
+  // 2. Data Source Selection (Mux)
+  //    sw[10] = 0: Internal DDS (HIL Mode)
+  //    sw[10] = 1: External XADC (Real Mode)
   // -------------------------------------------------------------------------
-
-  // sw[4:0] selects 0 to 30, mapping directly to 45 Hz through 75 Hz
-  // Base offset = 45 Hz * 256 = 11520
-  // Step per bit = 1 Hz * 256 = 256 (equivalent to left-shifting by 8)
-  assign center_freq = 24'd11520 + ({19'd0, sw[4:0]} << 8);
-
-  assign v_peak      = sw[11] ? 16'h1FFF: 16'h3FFF; // 50% voltage drop
-  assign v_h3_scale  = sw[12] ? 8'd38 : 8'd0;  // ~15% 3rd harmonic
-  assign v_h5_scale  = sw[13] ? 8'd19 : 8'd0;  // ~7.5% 5th harmonic
-  assign v_h7_scale  = sw[14] ? 8'd10 : 8'd0;  // ~4% 7th harmonic
-  assign jitter_en   = sw[15];
-
-  // Tie unused harmonics to 0
-  assign i_h3_scale  = 8'd0;
-  assign i_h5_scale  = 8'd0;
-  assign i_h7_scale  = 8'd0;
+  assign v_in       = sw[10] ? v_xadc : v_hil;
+  assign i_in       = sw[10] ? i_xadc : i_hil;
+  assign measure_en = sw[10] ? measure_xadc : measure_hil;
 
   // -------------------------------------------------------------------------
-  // 4. Instantiate System Top
+  // 3. Virtual Grid Generator (DDS)
   // -------------------------------------------------------------------------
-  system_top u_system (
-      .clk        (clk),
-      .rst_n      (~btnC),     // btnC is active-high on Basys 3
-      .uart_tx_out(RsTx),      // Map to physical UART pin
-      .uart_busy  (uart_busy),
-      .*  // Wildcard connects all wires declared above
+  dds_top #(
+      .CLOCK_FREQ_HZ (100_000_000.0),
+      .SAMPLE_RATE_HZ(20_000.0)
+  ) u_hil_grid (
+      .clk          (clk),
+      .rst          (btnC),
+      .measure_en   (measure_hil),
+      .center_freq  (center_freq),
+      .bit_precision(5'd12),
+      .v_peak       (v_peak),
+      .i_peak       (15'h3FFF),
+      .jitter_en    (sw[15]),
+      .jitter_depth (4'd4),
+      .current_phase(8'd32),
+      .v_h3_scale   (sw[12] ? 8'd38 : 8'd0),
+      .v_h5_scale   (sw[13] ? 8'd19 : 8'd0),
+      .v_h7_scale   (sw[14] ? 8'd10 : 8'd0),
+      .i_h3_scale   (8'd0),
+      .i_h5_scale   (8'd0),
+      .i_h7_scale   (8'd0),
+      .v_out        (v_hil),
+      .i_out        (i_hil)
   );
 
   // -------------------------------------------------------------------------
-  // 5. LED Visual Feedback
+  // 4. Physical XADC Interface (Digilent-Style Wrapper)
   // -------------------------------------------------------------------------
-  assign led[0]    = pll_locked;
-  assign led[15]   = uart_busy;
-  assign led[14:1] = q_inst[13:0]; // Show voltage magnitude
+  xadc_interface u_xadc (
+      .clk_100m    (clk),
+      .reset_n     (~btnC),
+      .v_p         (v_p),
+      .v_n         (v_n),
+      .i_p         (i_p),
+      .i_n         (i_n),
+      .v_data_o    (v_xadc),
+      .i_data_o    (i_xadc),
+      .data_valid_o(measure_xadc),
+      .activity_led(adc_activity),
+      .raw_v_debug (xadc_v_raw),
+      .raw_i_debug (xadc_i_raw)
+  );
+
+  // -------------------------------------------------------------------------
+  // 5. Processing System (The "Brain")
+  // -------------------------------------------------------------------------
+  logic signed [15:0] v_alpha, v_beta, v_d, v_q;
+  logic [15:0] theta, v_rms, i_rms;
+  logic [15:-8] freq_out;
+  logic pll_locked, uart_busy;
+  logic signed [15:0] p_avg, q_avg, p_inst, q_inst;
+  logic signed [15:0] i_alpha, i_beta;
+  logic [3:-12] thd_val, thd_12c;
+
+  system_top u_system (
+      .clk        (clk),
+      .rst_n      (~btnC),
+      .v_in       (v_in),
+      .i_in       (i_in),
+      .measure_en (measure_en),
+      .k_sogi     (16'sd8192),
+      .kp_pll     (16'sd120),
+      .ki_pll     (16'sd40),
+      .uart_tx_out(RsTx),
+      .*
+  );
+
+  // -------------------------------------------------------------------------
+  // 6. Controls & Feedback
+  // -------------------------------------------------------------------------
+  assign center_freq = 24'd11520 + ({19'd0, sw[4:0]} << 8);
+  assign v_peak      = sw[11] ? 15'h1FFF : 15'h3FFF;
+
+  // LED FEEDBACK:
+  assign led[11:0]   = sw[0] ? xadc_i_raw : xadc_v_raw;
+  assign led[12]     = pll_locked;  // Locked indicator
+  assign led[13]     = adc_activity;  // Toggles on ADC heartbeat
+  assign led[14]     = 1'b0;  // Unused
+  assign led[15]     = sw[10];  // Mode (High = Real)
 
 endmodule
