@@ -154,7 +154,7 @@ module thd_analyzer #(
       div_busy_norm     <= 1'b0;
       thd_sq_q24        <= 32'd0;
     end else if (measure_en) begin
-      if (pll_locked && (ms_fund > 32'd100)) begin
+      if (ms_fund > 32'd100) begin
         if (!div_busy_norm) begin
           // Start a new 32-bit Q24 division cycle
           div_num_norm      <= 64'(ms_harm) << 24;  // Align to Q24
@@ -192,7 +192,7 @@ module thd_analyzer #(
       .root_out(root_out)
   );
 
-  assign thd_val = pll_locked ? root_out : '1;
+  assign thd_val = root_out;
 
   // -------------------------------------------------------------------------
   // 5. IEC 61000-4-30 12-Cycle Averaging (Multi-Cycle Division)
