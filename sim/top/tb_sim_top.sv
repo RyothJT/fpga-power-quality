@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-module tb_system_top;
+module tb_sim_top;
 
   // -------------------------------------------------------------------------
   // Timing & Frequency Parameters
@@ -46,8 +46,8 @@ module tb_system_top;
   logic signed [ 15:0] ki_pll;
 
   // System Waveform Outputs
-  wire signed  [ 15:0] v_out;
-  wire signed  [ 15:0] i_out;
+  wire signed  [ 15:0] v_sim_out;
+  wire signed  [ 15:0] i_sim_out;
 
   // SOGI-PLL Telemetry Outputs
   wire signed  [ 15:0] v_alpha;
@@ -84,7 +84,7 @@ module tb_system_top;
   // -------------------------------------------------------------------------
   // Device Under Test (DUT)
   // -------------------------------------------------------------------------
-  system_top #(
+  sim_top #(
       .CLOCK_FREQ_HZ(SYSTEM_FREQ_HZ),
       .CENTER_FREQ_HZ(CENTER_FREQ_HZ),
       .BAUD_RATE(BAUD_RATE)
@@ -181,15 +181,15 @@ module tb_system_top;
     #(GRID_PERIOD_NS * 4.0);  // Settle
 
     // 1. Capture Voltage rising zero-crossing (Reference)
-    while (v_out >= 0) @(posedge clk);
-    while (v_out < 0) @(posedge clk);
+    while (v_sim_out >= 0) @(posedge clk);
+    while (v_sim_out < 0) @(posedge clk);
     t_v = $realtime;
 
     // 2. Find the NEXT Current rising zero-crossing
     // We wait for the voltage crossing, then look forward for the current.
     // This defines "Lag".
-    while (i_out >= 0) @(posedge clk);
-    while (i_out < 0) @(posedge clk);
+    while (i_sim_out >= 0) @(posedge clk);
+    while (i_sim_out < 0) @(posedge clk);
     t_i = $realtime;
 
     // 3. Calculate Lag
@@ -419,7 +419,7 @@ module tb_system_top;
 
   initial begin
     $dumpfile("sim/gen/vcd/current.vcd");
-    $dumpvars(0, tb_system_top);
+    $dumpvars(0, tb_sim_top);
   end
 
 endmodule
