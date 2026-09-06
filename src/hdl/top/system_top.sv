@@ -80,21 +80,21 @@ module system_top #(
 
   wire uart_update_strobe;
 
-  // 0. Diagnostics Transmitter
-  diagnostic_transmitter #(
-      .CLOCK_FREQ_HZ(CLOCK_FREQ_HZ),
-      .BAUD_RATE(BAUD_RATE)
-  ) u_diag (
-      .clk(clk),
-      .rst(~rst_n),
+  diagnostic_transmitter u_diag (
+      .clk          (clk),
+      .rst          (~rst_n),
       .update_strobe(uart_update_strobe),
-      .v_rms(v_rms),
-      .thd_12c(thd_val),  // Or your 12-cycle version
-      .p_avg(p_avg),
-      .RsTx(uart_tx_out),  // Map to physical pin
-      .busy(),
-      .tx_start(),
-      .tx_data()
+      .force_strobe (1'b0),        // Your debug heartbeat counter
+      .v_rms        (v_rms),
+      .i_rms        (i_rms),
+      .p_avg        (p_avg),
+      .q_avg        (q_avg),
+      .v_q          (v_q),                 // Send raw Vq to see why it won't lock
+      .freq         (freq_out[7:-8]),
+      .thd_12c      (thd_12c),
+      .locked       (pll_locked),
+      .RsTx         (uart_tx_out),
+      .busy         (uart_busy)
   );
 
   // -------------------------------------------------------------------------

@@ -5,22 +5,24 @@
  * Description: Estimates THD by isolating harmonics in the time domain.
  *              Filter strength (K) is dynamically calculated based on CLOCK_FREQ_HZ.
  *              Division is eliminated by normalizing harmonic power against nominal grid amplitude.
+ *              Averages THD over 12 cycles using a pipelined reciprocal multiplication
+ *              to prevent timing closure failures.
  *              Outputs all high (16'hffff) when pll is unlocked.
  */
 module thd_analyzer #(
     parameter real CLOCK_FREQ_HZ = 100_000_000.0,
     parameter real SAMPLE_RATE_HZ = CLOCK_FREQ_HZ / 100.0,
     parameter real CUTOFF_FREQ_HZ = 10.0,  // Aim for ~2Hz to heavily suppress 120Hz ripple
-    parameter real GRID_PEAK_NOMINAL_Q15 = 32767.0  // Nominal peak amplitude in Q1.15
+    parameter real GRID_PEAK_NOMINAL_Q15 = 32767.0,  // Nominal peak amplitude in Q1.15
+    parameter real GRID_FREQ_HZ = 60.0  // Nominal grid frequency
 ) (
     input logic clk,
     input logic rst_n,
 
-    input logic measure_en,
-
-    input logic signed [15:0] v_in,       // Raw Voltage (Q1.15)
-    input logic signed [15:0] v_alpha,    // Fundamental Sine (Q1.15)
-    input logic signed [15:0] v_beta,     // Fundamental Cosine (Q1.15)
+    input logic               measure_en,
+    input logic signed [15:0] v_in,        // Raw Voltage (Q1.15)
+    input logic signed [15:0] v_alpha,     // Fundamental Sine (Q1.15)
+    input logic signed [15:0] v_beta,      // Fundamental Cosine (Q1.15)
     input logic               pll_locked,
 
     output logic [3:-12] thd_val,  // THD in Q4.12 format
@@ -37,11 +39,15 @@ module thd_analyzer #(
   localparam int K = $clog2($rtoi(DIVISOR));
 
   // Pre-calculated Mean Square nominal reference: MS_nominal = (V_peak^2) / 2
-  localparam real MS_NOMINAL = (GRID_PEAK_NOMINAL_Q15 * GRID_PEAK_NOMINAL_Q15) / 2;
+  localparam real MS_NOMINAL = (GRID_PEAK_NOMINAL_Q15 * GRID_PEAK_NOMINAL_Q15) / 2.0;
 
   // Q0.32 fixed-point representation of inverse nominal mean square: (2^24) / MS_NOMINAL
   localparam real INV_MS_NOM_R = (2.0 ** 24) / MS_NOMINAL;
   localparam logic [31:0] INV_MS_NOM_Q32 = 32'($rtoi(INV_MS_NOM_R * (2.0 ** 16)));
+
+  // Pre-calculated 12-cycle nominal sample count and inverse reciprocal (Q0.32)
+  localparam real NOM_SAMPLES_12C = (SAMPLE_RATE_HZ / GRID_FREQ_HZ) * 12.0;
+  localparam logic [31:0] INV_NOM_SAMPLES_Q32 = 32'($rtoi((2.0 ** 32) / NOM_SAMPLES_12C));
 
   // -------------------------------------------------------------------------
   // 2. Time-Domain Harmonic Isolation (Pipelined Stage 1 & 2)
@@ -173,13 +179,20 @@ module thd_analyzer #(
   assign thd_val = pll_locked ? root_out : '1;
 
   // -------------------------------------------------------------------------
-  // 5. IEC 61000-4-30 12-Cycle Averaging (200ms Window)
+  // 5. IEC 61000-4-30 12-Cycle Averaging (Corrected Multi-Cycle Division)
   // -------------------------------------------------------------------------
   logic signed [15:0] v_alpha_prev;
   logic               cycle_start;
   logic        [ 3:0] cycle_cnt;
-  logic        [19:0] window_sample_cnt;
   logic        [35:0] thd_accumulator;
+  logic        [19:0] window_sample_cnt;
+
+  // Non-blocking Divider State Machine Registers
+  logic        [35:0] div_num;
+  logic        [19:0] div_den;
+  logic        [15:0] div_quotient;
+  logic        [ 4:0] div_bit_cnt;
+  logic               div_busy;
 
   // Detect positive-going zero crossing of fundamental sine (v_alpha)
   assign cycle_start = (v_alpha_prev < 0 && v_alpha >= 0);
@@ -188,38 +201,66 @@ module thd_analyzer #(
     if (!rst_n) begin
       v_alpha_prev      <= 16'd0;
       cycle_cnt         <= 4'd0;
-      window_sample_cnt <= 20'd0;
       thd_accumulator   <= 36'd0;
+      window_sample_cnt <= 20'd0;
+      div_num           <= 36'd0;
+      div_den           <= 20'd0;
+      div_quotient      <= 16'd0;
+      div_bit_cnt       <= 5'd0;
+      div_busy          <= 1'b0;
       thd_12c           <= '1;
       update_strobe     <= 1'b0;
-    end else if (measure_en) begin
-      v_alpha_prev <= v_alpha;
+    end else begin
+      update_strobe <= 1'b0;
 
       if (!pll_locked) begin
         cycle_cnt         <= 4'd0;
-        window_sample_cnt <= 20'd0;
         thd_accumulator   <= 36'd0;
+        window_sample_cnt <= 20'd0;
+        div_busy          <= 1'b0;
         thd_12c           <= '1;
-        update_strobe     <= 1'b0;
       end else begin
-        // Accumulate instantaneous THD and count samples
-        thd_accumulator   <= thd_accumulator + root_out;
-        window_sample_cnt <= window_sample_cnt + 1'b1;
+        // --- Continuous 12-Cycle Sample Accumulation ---
+        if (measure_en) begin
+          v_alpha_prev <= v_alpha;
 
-        update_strobe     <= 1'b0;
-        if (cycle_start) begin
-          if (cycle_cnt >= 11) begin
-            // 12 Cycles reached: Calculate Mean and Reset
-            if (window_sample_cnt > 0) begin
-              thd_12c       <= 16'(thd_accumulator / window_sample_cnt);
-              update_strobe <= 1'b1;
+          if (cycle_start) begin
+            if (cycle_cnt >= 11) begin
+              // 12 Cycles complete: Latch sum and total actual sample count
+              div_num           <= thd_accumulator + root_out;
+              div_den           <= window_sample_cnt + 1'b1;
+              div_quotient      <= 16'd0;
+              div_bit_cnt       <= 5'd16;  // Bit-shift count for Q4.12 precision
+              div_busy          <= 1'b1;
+
+              // Reset accumulator state for the next 12-cycle window
+              thd_accumulator   <= 36'd0;
+              window_sample_cnt <= 20'd0;
+              cycle_cnt         <= 4'd0;
+            end else begin
+              thd_accumulator   <= thd_accumulator + root_out;
+              window_sample_cnt <= window_sample_cnt + 1'b1;
+              cycle_cnt         <= cycle_cnt + 1'b1;
             end
-
-            thd_accumulator   <= 36'd0;
-            window_sample_cnt <= 20'd0;
-            cycle_cnt         <= 4'd0;
           end else begin
-            cycle_cnt <= cycle_cnt + 1'b1;
+            // Normal in-window sample addition
+            thd_accumulator   <= thd_accumulator + root_out;
+            window_sample_cnt <= window_sample_cnt + 1'b1;
+          end
+        end
+
+        // --- Multi-Cycle Shift-Subtract Divider Engine ---
+        if (div_busy) begin
+          if (div_bit_cnt > 0) begin
+            div_bit_cnt <= div_bit_cnt - 1'b1;
+            if (div_num >= ({16'd0, div_den} << (div_bit_cnt - 1))) begin
+              div_num      <= div_num - ({16'd0, div_den} << (div_bit_cnt - 1));
+              div_quotient <= div_quotient | (16'b1 << (div_bit_cnt - 1));
+            end
+          end else begin
+            div_busy      <= 1'b0;
+            thd_12c       <= div_quotient;  // Output in correct Q4.12 format
+            update_strobe <= 1'b1;
           end
         end
       end

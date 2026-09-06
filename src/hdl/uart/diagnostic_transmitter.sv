@@ -1,141 +1,128 @@
 `timescale 1ns / 1ps
 
 module diagnostic_transmitter #(
-    parameter real CLOCK_FREQ_HZ = 100_000_000.0,
-    parameter      BAUD_RATE     = 115200
+    parameter int BAUD_RATE   = 115200,
+    parameter int NUM_SIGNALS = 7
 ) (
     input logic clk,
     input logic rst,
-    input logic update_strobe, // Pulse from THD analyzer (every 12 cycles)
+    input logic update_strobe,  // From THD Analyzer
+    input logic force_strobe,   // From Top Level
 
-    // Diagnostic Data
     input logic [15:0] v_rms,
-    input logic [15:0] thd_12c,
-    input logic [15:0] p_avg,
+    i_rms,
+    p_avg,
+    q_avg,
+    v_q,
+    freq,
+    thd_12c,
+    input logic        locked,
 
-    // UART Interface
-    output logic tx_start,
-    output logic [7:0] tx_data,
-    output logic busy,
-    output logic RsTx
+    output logic RsTx,
+    output logic busy
 );
 
-  typedef enum logic [3:0] {
+  localparam int PACKET_SIZE = 2 + (NUM_SIGNALS * 2) + 1;  // 17 bytes
+
+  typedef enum logic [1:0] {
     IDLE,
-    SEND_HEADER,
-    SEND_V_H,
-    SEND_V_L,
-    SEND_THD_H,
-    SEND_THD_L,
-    SEND_P_H,
-    SEND_P_L,
-    SEND_FOOTER,
-    WAIT_BUSY
+    SEND_BYTE,
+    WAIT_ACK,
+    WAIT_DONE
   } state_t;
+  state_t        state;
 
-  state_t state, next_state;
-  logic [15:0] v_reg, thd_reg, p_reg;
+  logic   [ 7:0] packet             [PACKET_SIZE];
+  logic   [ 4:0] byte_idx;
+  logic   [ 7:0] tx_buffer_data;
+  logic          tx_buffer_start;
+  wire           uart_busy_int;
 
-  // Instantiate your UART TX core internally or externally
+  // --- Internal Heartbeat (Triggers every 0.5s if top-level fails) ---
+  logic   [26:0] internal_heartbeat;
+  always_ff @(posedge clk) begin
+    if (rst) internal_heartbeat <= 0;
+    else internal_heartbeat <= internal_heartbeat + 1;
+  end
+  wire local_trigger = (internal_heartbeat == 27'd50_000_000);
+
+  // --- PACKET MAP ---
+  always_comb begin
+    packet[0]  = 8'hAA;
+    packet[1]  = {7'b0, locked};
+    packet[2]  = v_rms[15:8];
+    packet[3]  = v_rms[7:0];
+    packet[4]  = i_rms[15:8];
+    packet[5]  = i_rms[7:0];
+    packet[6]  = p_avg[15:8];
+    packet[7]  = p_avg[7:0];
+    packet[8]  = q_avg[15:8];
+    packet[9]  = q_avg[7:0];
+    packet[10] = v_q[15:8];
+    packet[11] = v_q[7:0];
+    packet[12] = freq[15:8];
+    packet[13] = freq[7:0];
+    packet[14] = thd_12c[15:8];
+    packet[15] = thd_12c[7:0];
+    packet[16] = 8'h55;
+  end
+
   uart_tx #(
-      .BAUD_RATE(BAUD_RATE),  // Higher baud recommended for diagnostics
-      .CLK_FREQ(CLOCK_FREQ_HZ)
-  ) u_tx (
+      .BAUD_RATE(BAUD_RATE)
+  ) u_uart (
       .clk(clk),
       .rst(rst),
-      .tx_start(tx_start),
-      .tx_data(tx_data),
+      .tx_start(tx_buffer_start),
+      .tx_data(tx_buffer_data),
       .RsTx(RsTx),
-      .busy(busy)
+      .busy(uart_busy_int)
   );
+
+  assign busy = uart_busy_int;
 
   always_ff @(posedge clk) begin
     if (rst) begin
       state <= IDLE;
-      tx_start <= 0;
-      tx_data <= 8'h00;
+      byte_idx <= 0;
+      tx_buffer_start <= 0;
+      tx_buffer_data <= 0;
     end else begin
-      tx_start <= 0;  // Default pulse
+      tx_buffer_start <= 0;
 
       case (state)
         IDLE: begin
-          if (update_strobe) begin
-            // Latch data so it doesn't change mid-transmission
-            v_reg   <= v_rms;
-            thd_reg <= thd_12c;
-            p_reg   <= p_avg;
-            state   <= SEND_HEADER;
+          if (update_strobe || force_strobe || local_trigger) begin
+            byte_idx <= 0;
+            state    <= SEND_BYTE;
           end
         end
 
-        SEND_HEADER:
-        if (!busy) begin
-          tx_data <= 8'hAA;  // Start of Frame
-          tx_start <= 1;
-          next_state <= SEND_V_H;
-          state <= WAIT_BUSY;
+        SEND_BYTE: begin
+          if (!uart_busy_int) begin
+            tx_buffer_data  <= packet[byte_idx];
+            tx_buffer_start <= 1;
+            state           <= WAIT_ACK;
+          end
         end
 
-        SEND_V_H:
-        if (!busy) begin
-          tx_data <= v_reg[15:8];
-          tx_start <= 1;
-          next_state <= SEND_V_L;
-          state <= WAIT_BUSY;
+        WAIT_ACK: begin
+          // Wait for UART to register the start pulse
+          state <= WAIT_DONE;
         end
 
-        SEND_V_L:
-        if (!busy) begin
-          tx_data <= v_reg[7:0];
-          tx_start <= 1;
-          next_state <= SEND_THD_H;
-          state <= WAIT_BUSY;
+        WAIT_DONE: begin
+          // Wait for UART to finish the 10-bit frame (Start + 8 Data + Stop)
+          if (!uart_busy_int) begin
+            if (byte_idx == PACKET_SIZE - 1) begin
+              state <= IDLE;
+            end else begin
+              byte_idx <= byte_idx + 1;
+              state    <= SEND_BYTE;
+            end
+          end
         end
 
-        SEND_THD_H:
-        if (!busy) begin
-          tx_data <= thd_reg[15:8];
-          tx_start <= 1;
-          next_state <= SEND_THD_L;
-          state <= WAIT_BUSY;
-        end
-
-        SEND_THD_L:
-        if (!busy) begin
-          tx_data <= thd_reg[7:0];
-          tx_start <= 1;
-          next_state <= SEND_P_H;
-          state <= WAIT_BUSY;
-        end
-
-        SEND_P_H:
-        if (!busy) begin
-          tx_data <= p_reg[15:8];
-          tx_start <= 1;
-          next_state <= SEND_P_L;
-          state <= WAIT_BUSY;
-        end
-
-        SEND_P_L:
-        if (!busy) begin
-          tx_data <= p_reg[7:0];
-          tx_start <= 1;
-          next_state <= SEND_FOOTER;
-          state <= WAIT_BUSY;
-        end
-
-        SEND_FOOTER:
-        if (!busy) begin
-          tx_data <= 8'h55;  // End of Frame
-          tx_start <= 1;
-          next_state <= IDLE;
-          state <= WAIT_BUSY;
-        end
-
-        WAIT_BUSY: begin
-          // Small delay to let 'busy' signal from uart_tx assert
-          if (busy) state <= next_state;
-        end
+        default: state <= IDLE;
       endcase
     end
   end

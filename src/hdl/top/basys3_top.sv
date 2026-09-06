@@ -9,9 +9,9 @@ module basys3_top (
   // -------------------------------------------------------------------------
   // 1. Control Signals (Required for .* connection)
   // -------------------------------------------------------------------------
-  logic [23:0] center_freq = 24'd15360;  // 60.0 Hz
+  logic [23:0] center_freq;  // 60.0 Hz
   logic [ 4:0] bit_precision = 5'd12;
-  logic [14:0] v_peak = 15'h3FFF;  // 100%
+  logic [14:0] v_peak;
   logic [14:0] i_peak = 15'h3FFF;
   logic        jitter_en;
   logic [ 3:0] jitter_depth = 4'd4;
@@ -45,15 +45,22 @@ module basys3_top (
   // -------------------------------------------------------------------------
   // 3. Physical Mappings
   // -------------------------------------------------------------------------
-  assign jitter_en  = sw[0];
-  assign v_h3_scale = sw[1] ? 8'd38 : 8'd0;  // ~15% 3rd harmonic
+
+  // sw[4:0] selects 0 to 30, mapping directly to 45 Hz through 75 Hz
+  // Base offset = 45 Hz * 256 = 11520
+  // Step per bit = 1 Hz * 256 = 256 (equivalent to left-shifting by 8)
+  assign center_freq = 24'd11520 + ({19'd0, sw[4:0]} << 8);
+
+  assign v_peak      = sw[11] ? 16'h1FFF: 16'h3FFF; // 50% voltage drop
+  assign v_h3_scale  = sw[12] ? 8'd38 : 8'd0;  // ~15% 3rd harmonic
+  assign v_h5_scale  = sw[13] ? 8'd19 : 8'd0;  // ~7.5% 5th harmonic
+  assign v_h7_scale  = sw[14] ? 8'd10 : 8'd0;  // ~4% 7th harmonic
+  assign jitter_en   = sw[15];
 
   // Tie unused harmonics to 0
-  assign v_h5_scale = 8'd0;
-  assign v_h7_scale = 8'd0;
-  assign i_h3_scale = 8'd0;
-  assign i_h5_scale = 8'd0;
-  assign i_h7_scale = 8'd0;
+  assign i_h3_scale  = 8'd0;
+  assign i_h5_scale  = 8'd0;
+  assign i_h7_scale  = 8'd0;
 
   // -------------------------------------------------------------------------
   // 4. Instantiate System Top
@@ -71,6 +78,6 @@ module basys3_top (
   // -------------------------------------------------------------------------
   assign led[0]    = pll_locked;
   assign led[15]   = uart_busy;
-  assign led[14:1] = v_rms[13:0]; // Show voltage magnitude
+  assign led[14:1] = q_inst[13:0]; // Show voltage magnitude
 
 endmodule

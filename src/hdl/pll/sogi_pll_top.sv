@@ -224,8 +224,8 @@ module sogi_pll_top #(
     end
   end
 
-  localparam real NOM_CYCLES_PER_PERIOD = CLOCK_FREQ_HZ / CENTER_FREQ_HZ;
-  localparam int PHASE_EMA_SHIFT = $rtoi($clog2(NOM_CYCLES_PER_PERIOD));  // e.g. 21 for 100MHz/60Hz
+  localparam int NOM_CYCLES_PER_PERIOD = CLOCK_FREQ_HZ / CENTER_FREQ_HZ;
+  localparam int PHASE_EMA_SHIFT = $clog2(NOM_CYCLES_PER_PERIOD);  // e.g. 21 for 100MHz/60Hz
 
   // -------------------------------------------------------------------------
   // Continuous Phase Increment Smoother (Division-Free EMA Filter)
@@ -265,8 +265,8 @@ module sogi_pll_top #(
   // 6. Robust Lock-Detector with Fast Instant-Unlock & Synchronous Re-Lock
   // -------------------------------------------------------------------------
   // Compute EMA parameterization to match 1-period time constant (1 / CENTER_FREQ_HZ)
-  localparam real PERIOD_CYCLES_R = CLOCK_FREQ_HZ / CENTER_FREQ_HZ;
-  localparam int VQ_EMA_SHIFT = $rtoi($clog2(PERIOD_CYCLES_R));  // e.g. 21 for 100MHz/60Hz
+  localparam int PERIOD_CYCLES_R = CLOCK_FREQ_HZ / CENTER_FREQ_HZ;
+  localparam int VQ_EMA_SHIFT = $clog2(PERIOD_CYCLES_R);  // e.g. 21 for 100MHz/60Hz
 
   logic        [31:0] clk_counter;
   logic        [31:0] measured_period_clks;
