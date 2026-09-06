@@ -3,17 +3,18 @@
 /**
  * Module: thd_analyzer
  * Description: Estimates THD by isolating harmonics in the time domain.
- *              Filter strength (K) is dynamically calculated based on CLOCK_FREQ_HZ.
- *              Division is eliminated by normalizing harmonic power against nominal grid amplitude.
- *              Averages THD over 12 cycles using a pipelined reciprocal multiplication
- *              to prevent timing closure failures.
- *              Outputs all high (16'hffff) when pll is unlocked.
+ *              Filter strength (K) is dynamically calculated based on SAMPLE_RATE_HZ.
+ *              Dynamic normalization against measured fundamental power (ms_fund)
+ *              eliminates voltage-dependent magnitude scaling errors.
+ *              Averages THD over 12 cycles using a multi-cycle divider
+ *              to comply with IEC 61000-4-30 standard.
+ *              Outputs all high (16'hffff) when PLL is unlocked.
  */
 module thd_analyzer #(
     parameter real CLOCK_FREQ_HZ = 100_000_000.0,
-    parameter real SAMPLE_RATE_HZ = CLOCK_FREQ_HZ / 100.0,
-    parameter real CUTOFF_FREQ_HZ = 10.0,  // Aim for ~2Hz to heavily suppress 120Hz ripple
-    parameter real GRID_PEAK_NOMINAL_Q15 = 32767.0,  // Nominal peak amplitude in Q1.15
+    parameter real SAMPLE_RATE_HZ = 1_000_000.0,  // 1 MSPS
+    parameter real CUTOFF_FREQ_HZ = 10.0,  // ~2Hz to suppress 120Hz ripple
+    parameter real GRID_PEAK_NOMINAL_Q15 = 16383.0,  // Nominal peak amplitude in Q1.15 (16'h3FFF)
     parameter real GRID_FREQ_HZ = 60.0  // Nominal grid frequency
 ) (
     input logic clk,
@@ -34,20 +35,9 @@ module thd_analyzer #(
   // -------------------------------------------------------------------------
   // 1. Dynamic Filter & Multiplicative Inverse Parameters
   // -------------------------------------------------------------------------
-  // Formula: 2^K = F_clk / (2 * pi * F_cutoff)
+  // Formula: 2^K = F_sample / (2 * pi * F_cutoff)
   localparam real DIVISOR = SAMPLE_RATE_HZ / (2.0 * 3.14159265 * CUTOFF_FREQ_HZ);
   localparam int K = $clog2($rtoi(DIVISOR));
-
-  // Pre-calculated Mean Square nominal reference: MS_nominal = (V_peak^2) / 2
-  localparam real MS_NOMINAL = (GRID_PEAK_NOMINAL_Q15 * GRID_PEAK_NOMINAL_Q15) / 2.0;
-
-  // Q0.32 fixed-point representation of inverse nominal mean square: (2^24) / MS_NOMINAL
-  localparam real INV_MS_NOM_R = (2.0 ** 24) / MS_NOMINAL;
-  localparam logic [31:0] INV_MS_NOM_Q32 = 32'($rtoi(INV_MS_NOM_R * (2.0 ** 16)));
-
-  // Pre-calculated 12-cycle nominal sample count and inverse reciprocal (Q0.32)
-  localparam real NOM_SAMPLES_12C = (SAMPLE_RATE_HZ / GRID_FREQ_HZ) * 12.0;
-  localparam logic [31:0] INV_NOM_SAMPLES_Q32 = 32'($rtoi((2.0 ** 32) / NOM_SAMPLES_12C));
 
   // -------------------------------------------------------------------------
   // 2. Time-Domain Harmonic Isolation (Pipelined Stage 1 & 2)
@@ -139,34 +129,60 @@ module thd_analyzer #(
   end
 
   // -------------------------------------------------------------------------
-  // 4. Division-Free Ratio Calculation & Square Root (THD Calculation)
+  // 4. Synthesizable Multi-Cycle Division (Dynamic ms_harm / ms_fund)
   // -------------------------------------------------------------------------
-
   logic [31:0] ms_harm, ms_fund;
   assign ms_harm = ms_harm_acc >> K;
   assign ms_fund = ms_fund_acc >> K;
 
   logic [ 31:0] thd_sq_q24;
   logic [3:-12] root_out;
-  logic [ 63:0] thd_mult;
+
+  // Non-blocking Shift-and-Subtract Divider for Dynamic Power Normalization
+  logic [ 63:0] div_num_norm;
+  logic [ 31:0] div_den_norm;
+  logic [ 31:0] div_quotient_norm;
+  logic [  5:0] div_bit_cnt_norm;
+  logic         div_busy_norm;
 
   always_ff @(posedge clk) begin
     if (!rst_n) begin
-      thd_mult   <= '0;
-      thd_sq_q24 <= '0;
+      div_num_norm      <= 64'd0;
+      div_den_norm      <= 32'd0;
+      div_quotient_norm <= 32'd0;
+      div_bit_cnt_norm  <= 6'd0;
+      div_busy_norm     <= 1'b0;
+      thd_sq_q24        <= 32'd0;
     end else if (measure_en) begin
-      if (pll_locked && ms_fund > 100) begin
-        // Division replacement: multiply by Q0.32 inverse nominal constant
-        thd_mult   <= 64'(ms_harm) * 64'(INV_MS_NOM_Q32);
-        thd_sq_q24 <= thd_mult[47:16];
+      if (pll_locked && (ms_fund > 32'd100)) begin
+        if (!div_busy_norm) begin
+          // Start a new 32-bit Q24 division cycle
+          div_num_norm      <= 64'(ms_harm) << 24;  // Align to Q24
+          div_den_norm      <= ms_fund;
+          div_quotient_norm <= 32'd0;
+          div_bit_cnt_norm  <= 6'd32;
+          div_busy_norm     <= 1'b1;
+        end else begin
+          // Step through non-blocking division
+          if (div_bit_cnt_norm > 0) begin
+            div_bit_cnt_norm <= div_bit_cnt_norm - 1'b1;
+            if (div_num_norm >= (64'(div_den_norm) << (div_bit_cnt_norm - 1))) begin
+              div_num_norm      <= div_num_norm - (64'(div_den_norm) << (div_bit_cnt_norm - 1));
+              div_quotient_norm <= div_quotient_norm | (32'd1 << (div_bit_cnt_norm - 1));
+            end
+          end else begin
+            div_busy_norm <= 1'b0;
+            thd_sq_q24    <= div_quotient_norm;
+          end
+        end
       end else begin
-        thd_mult   <= '0;
-        thd_sq_q24 <= '0;
+        div_busy_norm <= 1'b0;
+        thd_sq_q24    <= 32'd0;
       end
     end
   end
 
-  // Square Root Instance
+  // Square Root Instance (Q24 Power -> Q12 Amplitude)
   isqrt #(
       .WIDTH(32)
   ) u_isqrt_thd (
@@ -179,7 +195,7 @@ module thd_analyzer #(
   assign thd_val = pll_locked ? root_out : '1;
 
   // -------------------------------------------------------------------------
-  // 5. IEC 61000-4-30 12-Cycle Averaging (Corrected Multi-Cycle Division)
+  // 5. IEC 61000-4-30 12-Cycle Averaging (Multi-Cycle Division)
   // -------------------------------------------------------------------------
   logic signed [15:0] v_alpha_prev;
   logic               cycle_start;
