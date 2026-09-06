@@ -170,7 +170,7 @@
                     item_ref: (100),
                     level: 0,
                     unfolded: true,
-                    selected: false,
+                    selected: true,
                 ),
                 (
                     item_ref: (93),
@@ -185,12 +185,6 @@
                     selected: false,
                 ),
                 (
-                    item_ref: (95),
-                    level: 0,
-                    unfolded: true,
-                    selected: false,
-                ),
-                (
                     item_ref: (97),
                     level: 0,
                     unfolded: true,
@@ -199,57 +193,6 @@
             ],
         ),
         displayed_items: {
-            (95): Variable((
-                variable_ref: (
-                    path: (
-                        strs: [
-                            "tb_system_top",
-                            "uut",
-                            "u_thd",
-                        ],
-                        id: Wellen((43)),
-                    ),
-                    name: "v_in",
-                    id: Wellen((510)),
-                    index: None,
-                ),
-                color: None,
-                background_color: None,
-                display_name: "v_in [15:0]",
-                display_name_type: Unique,
-                manual_name: None,
-                format: Some("Signed"),
-                field_formats: [],
-                height_scaling_factor: Some(2.0),
-                analog: Some((
-                    settings: (
-                        render_style: Step,
-                        y_axis_scale: Viewport,
-                    ),
-                )),
-            )),
-            (78): Variable((
-                variable_ref: (
-                    path: (
-                        strs: [
-                            "tb_system_top",
-                        ],
-                        id: Wellen((2)),
-                    ),
-                    name: "rst_n",
-                    id: Wellen((46)),
-                    index: None,
-                ),
-                color: None,
-                background_color: None,
-                display_name: "rst_n",
-                display_name_type: Unique,
-                manual_name: None,
-                format: None,
-                field_formats: [],
-                height_scaling_factor: None,
-                analog: None,
-            )),
             (83): Variable((
                 variable_ref: (
                     path: (
@@ -304,89 +247,6 @@
                     ),
                 )),
             )),
-            (97): Variable((
-                variable_ref: (
-                    path: (
-                        strs: [
-                            "tb_system_top",
-                            "uut",
-                            "u_thd",
-                        ],
-                        id: Wellen((43)),
-                    ),
-                    name: "v_harm_instant",
-                    id: Wellen((530)),
-                    index: None,
-                ),
-                color: None,
-                background_color: None,
-                display_name: "v_harm_instant [15:0]",
-                display_name_type: Unique,
-                manual_name: None,
-                format: Some("Signed"),
-                field_formats: [],
-                height_scaling_factor: Some(2.0),
-                analog: Some((
-                    settings: (
-                        render_style: Step,
-                        y_axis_scale: Viewport,
-                    ),
-                )),
-            )),
-            (82): Variable((
-                variable_ref: (
-                    path: (
-                        strs: [
-                            "tb_system_top",
-                        ],
-                        id: Wellen((2)),
-                    ),
-                    name: "v_d",
-                    id: Wellen((4)),
-                    index: None,
-                ),
-                color: None,
-                background_color: None,
-                display_name: "v_d [15:0]",
-                display_name_type: Unique,
-                manual_name: None,
-                format: Some("Signed"),
-                field_formats: [],
-                height_scaling_factor: Some(4.0),
-                analog: Some((
-                    settings: (
-                        render_style: Step,
-                        y_axis_scale: Global,
-                    ),
-                )),
-            )),
-            (81): Variable((
-                variable_ref: (
-                    path: (
-                        strs: [
-                            "tb_system_top",
-                        ],
-                        id: Wellen((2)),
-                    ),
-                    name: "v_beta",
-                    id: Wellen((5)),
-                    index: None,
-                ),
-                color: None,
-                background_color: None,
-                display_name: "tb_system_top.v_beta [15:0]",
-                display_name_type: Unique,
-                manual_name: None,
-                format: Some("Signed"),
-                field_formats: [],
-                height_scaling_factor: Some(4.0),
-                analog: Some((
-                    settings: (
-                        render_style: Step,
-                        y_axis_scale: Global,
-                    ),
-                )),
-            )),
             (79): Variable((
                 variable_ref: (
                     path: (
@@ -414,7 +274,7 @@
                     ),
                 )),
             )),
-            (84): Variable((
+            (99): Variable((
                 variable_ref: (
                     path: (
                         strs: [
@@ -422,13 +282,138 @@
                         ],
                         id: Wellen((2)),
                     ),
-                    name: "v_peak",
-                    id: Wellen((51)),
+                    name: "i_out",
+                    id: Wellen((18)),
                     index: None,
                 ),
                 color: None,
                 background_color: None,
-                display_name: "v_peak [14:0]",
+                display_name: "i_out [15:0]",
+                display_name_type: Unique,
+                manual_name: None,
+                format: Some("Signed"),
+                field_formats: [],
+                height_scaling_factor: Some(4.0),
+                analog: Some((
+                    settings: (
+                        render_style: Step,
+                        y_axis_scale: Global,
+                    ),
+                )),
+            )),
+            (100): Variable((
+                variable_ref: (
+                    path: (
+                        strs: [
+                            "tb_system_top",
+                        ],
+                        id: Wellen((2)),
+                    ),
+                    name: "q_avg",
+                    id: Wellen((13)),
+                    index: None,
+                ),
+                color: None,
+                background_color: None,
+                display_name: "q_avg [15:0]",
+                display_name_type: Unique,
+                manual_name: None,
+                format: Some("Signed"),
+                field_formats: [],
+                height_scaling_factor: Some(2.0),
+                analog: Some((
+                    settings: (
+                        render_style: Step,
+                        y_axis_scale: Viewport,
+                    ),
+                )),
+            )),
+            (75): Variable((
+                variable_ref: (
+                    path: (
+                        strs: [
+                            "tb_system_top",
+                        ],
+                        id: Wellen((2)),
+                    ),
+                    name: "jitter_depth",
+                    id: Wellen((40)),
+                    index: None,
+                ),
+                color: None,
+                background_color: None,
+                display_name: "jitter_depth [3:0]",
+                display_name_type: Unique,
+                manual_name: None,
+                format: None,
+                field_formats: [],
+                height_scaling_factor: None,
+                analog: None,
+            )),
+            (81): Variable((
+                variable_ref: (
+                    path: (
+                        strs: [
+                            "tb_system_top",
+                        ],
+                        id: Wellen((2)),
+                    ),
+                    name: "v_beta",
+                    id: Wellen((5)),
+                    index: None,
+                ),
+                color: None,
+                background_color: None,
+                display_name: "tb_system_top.v_beta [15:0]",
+                display_name_type: Unique,
+                manual_name: None,
+                format: Some("Signed"),
+                field_formats: [],
+                height_scaling_factor: Some(4.0),
+                analog: Some((
+                    settings: (
+                        render_style: Step,
+                        y_axis_scale: Viewport,
+                    ),
+                )),
+            )),
+            (78): Variable((
+                variable_ref: (
+                    path: (
+                        strs: [
+                            "tb_system_top",
+                        ],
+                        id: Wellen((2)),
+                    ),
+                    name: "rst_n",
+                    id: Wellen((46)),
+                    index: None,
+                ),
+                color: None,
+                background_color: None,
+                display_name: "rst_n",
+                display_name_type: Unique,
+                manual_name: None,
+                format: None,
+                field_formats: [],
+                height_scaling_factor: None,
+                analog: None,
+            )),
+            (82): Variable((
+                variable_ref: (
+                    path: (
+                        strs: [
+                            "tb_system_top",
+                        ],
+                        id: Wellen((2)),
+                    ),
+                    name: "v_d",
+                    id: Wellen((4)),
+                    index: None,
+                ),
+                color: None,
+                background_color: None,
+                display_name: "v_d [15:0]",
                 display_name_type: Unique,
                 manual_name: None,
                 format: Some("Signed"),
@@ -468,7 +453,7 @@
                     ),
                 )),
             )),
-            (93): Variable((
+            (77): Variable((
                 variable_ref: (
                     path: (
                         strs: [
@@ -476,163 +461,16 @@
                         ],
                         id: Wellen((2)),
                     ),
-                    name: "thd_val",
-                    id: Wellen((10)),
+                    name: "pll_locked",
+                    id: Wellen((14)),
                     index: None,
                 ),
                 color: None,
                 background_color: None,
-                display_name: "thd_val [3:-12]",
-                display_name_type: Unique,
-                manual_name: None,
-                format: Some("Unsigned fixed point"),
-                field_formats: [],
-                height_scaling_factor: Some(2.0),
-                analog: Some((
-                    settings: (
-                        render_style: Step,
-                        y_axis_scale: Viewport,
-                    ),
-                )),
-            )),
-            (74): Variable((
-                variable_ref: (
-                    path: (
-                        strs: [
-                            "tb_system_top",
-                        ],
-                        id: Wellen((2)),
-                    ),
-                    name: "i_peak",
-                    id: Wellen((39)),
-                    index: None,
-                ),
-                color: None,
-                background_color: None,
-                display_name: "i_peak [14:0]",
-                display_name_type: Unique,
-                manual_name: None,
-                format: Some("Unsigned"),
-                field_formats: [],
-                height_scaling_factor: None,
-                analog: None,
-            )),
-            (98): Variable((
-                variable_ref: (
-                    path: (
-                        strs: [
-                            "tb_system_top",
-                        ],
-                        id: Wellen((2)),
-                    ),
-                    name: "thd_12c",
-                    id: Wellen((11)),
-                    index: None,
-                ),
-                color: None,
-                background_color: None,
-                display_name: "thd_12c [3:-12]",
-                display_name_type: Unique,
-                manual_name: None,
-                format: Some("Unsigned fixed point"),
-                field_formats: [],
-                height_scaling_factor: None,
-                analog: None,
-            )),
-            (72): Variable((
-                variable_ref: (
-                    path: (
-                        strs: [
-                            "tb_system_top",
-                        ],
-                        id: Wellen((2)),
-                    ),
-                    name: "freq_out",
-                    id: Wellen((21)),
-                    index: None,
-                ),
-                color: None,
-                background_color: None,
-                display_name: "freq_out [15:-8]",
-                display_name_type: Unique,
-                manual_name: None,
-                format: Some("Unsigned fixed point"),
-                field_formats: [],
-                height_scaling_factor: Some(4.0),
-                analog: Some((
-                    settings: (
-                        render_style: Step,
-                        y_axis_scale: Global,
-                    ),
-                )),
-            )),
-            (71): Variable((
-                variable_ref: (
-                    path: (
-                        strs: [
-                            "tb_system_top",
-                        ],
-                        id: Wellen((2)),
-                    ),
-                    name: "current_phase",
-                    id: Wellen((35)),
-                    index: None,
-                ),
-                color: None,
-                background_color: None,
-                display_name: "current_phase [7:0]",
-                display_name_type: Unique,
-                manual_name: None,
-                format: Some("Unsigned"),
-                field_formats: [],
-                height_scaling_factor: None,
-                analog: Some((
-                    settings: (
-                        render_style: Step,
-                        y_axis_scale: Global,
-                    ),
-                )),
-            )),
-            (75): Variable((
-                variable_ref: (
-                    path: (
-                        strs: [
-                            "tb_system_top",
-                        ],
-                        id: Wellen((2)),
-                    ),
-                    name: "jitter_depth",
-                    id: Wellen((40)),
-                    index: None,
-                ),
-                color: None,
-                background_color: None,
-                display_name: "jitter_depth [3:0]",
+                display_name: "pll_locked",
                 display_name_type: Unique,
                 manual_name: None,
                 format: None,
-                field_formats: [],
-                height_scaling_factor: None,
-                analog: None,
-            )),
-            (69): Variable((
-                variable_ref: (
-                    path: (
-                        strs: [
-                            "tb_system_top",
-                        ],
-                        id: Wellen((2)),
-                    ),
-                    name: "center_freq",
-                    id: Wellen((33)),
-                    index: None,
-                ),
-                color: None,
-                background_color: None,
-                display_name: "center_freq [23:0]",
-                display_name_type: Unique,
-                manual_name: None,
-                format: Some("Unsigned fixed point"),
                 field_formats: [],
                 height_scaling_factor: None,
                 analog: None,
@@ -686,6 +524,55 @@
                 height_scaling_factor: None,
                 analog: None,
             )),
+            (84): Variable((
+                variable_ref: (
+                    path: (
+                        strs: [
+                            "tb_system_top",
+                        ],
+                        id: Wellen((2)),
+                    ),
+                    name: "v_peak",
+                    id: Wellen((51)),
+                    index: None,
+                ),
+                color: None,
+                background_color: None,
+                display_name: "v_peak [14:0]",
+                display_name_type: Unique,
+                manual_name: None,
+                format: Some("Signed"),
+                field_formats: [],
+                height_scaling_factor: Some(4.0),
+                analog: Some((
+                    settings: (
+                        render_style: Step,
+                        y_axis_scale: Global,
+                    ),
+                )),
+            )),
+            (74): Variable((
+                variable_ref: (
+                    path: (
+                        strs: [
+                            "tb_system_top",
+                        ],
+                        id: Wellen((2)),
+                    ),
+                    name: "i_peak",
+                    id: Wellen((39)),
+                    index: None,
+                ),
+                color: None,
+                background_color: None,
+                display_name: "i_peak [14:0]",
+                display_name_type: Unique,
+                manual_name: None,
+                format: Some("Unsigned"),
+                field_formats: [],
+                height_scaling_factor: None,
+                analog: None,
+            )),
             (89): Variable((
                 variable_ref: (
                     path: (
@@ -694,10 +581,10 @@
                             "uut",
                             "u_power",
                         ],
-                        id: Wellen((34)),
+                        id: Wellen((35)),
                     ),
                     name: "p_avg",
-                    id: Wellen((463)),
+                    id: Wellen((523)),
                     index: None,
                 ),
                 color: None,
@@ -715,7 +602,7 @@
                     ),
                 )),
             )),
-            (100): Variable((
+            (70): Variable((
                 variable_ref: (
                     path: (
                         strs: [
@@ -723,24 +610,19 @@
                         ],
                         id: Wellen((2)),
                     ),
-                    name: "q_avg",
-                    id: Wellen((13)),
+                    name: "clk",
+                    id: Wellen((34)),
                     index: None,
                 ),
                 color: None,
                 background_color: None,
-                display_name: "q_avg [15:0]",
+                display_name: "clk",
                 display_name_type: Unique,
                 manual_name: None,
-                format: Some("Unsigned"),
+                format: None,
                 field_formats: [],
-                height_scaling_factor: Some(2.0),
-                analog: Some((
-                    settings: (
-                        render_style: Step,
-                        y_axis_scale: Viewport,
-                    ),
-                )),
+                height_scaling_factor: None,
+                analog: None,
             )),
             (88): Variable((
                 variable_ref: (
@@ -750,10 +632,10 @@
                             "uut",
                             "u_power",
                         ],
-                        id: Wellen((34)),
+                        id: Wellen((35)),
                     ),
                     name: "p_inst",
-                    id: Wellen((474)),
+                    id: Wellen((540)),
                     index: None,
                 ),
                 color: None,
@@ -768,6 +650,33 @@
                     settings: (
                         render_style: Step,
                         y_axis_scale: Viewport,
+                    ),
+                )),
+            )),
+            (72): Variable((
+                variable_ref: (
+                    path: (
+                        strs: [
+                            "tb_system_top",
+                        ],
+                        id: Wellen((2)),
+                    ),
+                    name: "freq_out",
+                    id: Wellen((21)),
+                    index: None,
+                ),
+                color: None,
+                background_color: None,
+                display_name: "freq_out [15:-8]",
+                display_name_type: Unique,
+                manual_name: None,
+                format: Some("Unsigned fixed point"),
+                field_formats: [],
+                height_scaling_factor: Some(4.0),
+                analog: Some((
+                    settings: (
+                        render_style: Step,
+                        y_axis_scale: Global,
                     ),
                 )),
             )),
@@ -794,52 +703,59 @@
                 analog: Some((
                     settings: (
                         render_style: Step,
-                        y_axis_scale: Global,
+                        y_axis_scale: Viewport,
                     ),
                 )),
             )),
-            (70): Variable((
+            (97): Placeholder((
                 variable_ref: (
                     path: (
                         strs: [
                             "tb_system_top",
+                            "uut",
+                            "u_thd",
                         ],
-                        id: Wellen((2)),
+                        id: Wellen((43)),
                     ),
-                    name: "clk",
-                    id: Wellen((34)),
+                    name: "v_harm_instant",
+                    id: r#None,
                     index: None,
                 ),
                 color: None,
                 background_color: None,
-                display_name: "clk",
-                display_name_type: Unique,
-                manual_name: None,
-                format: None,
-                field_formats: [],
-                height_scaling_factor: None,
-                analog: None,
-            )),
-            (99): Variable((
-                variable_ref: (
-                    path: (
-                        strs: [
-                            "tb_system_top",
-                        ],
-                        id: Wellen((2)),
-                    ),
-                    name: "i_out",
-                    id: Wellen((18)),
-                    index: None,
-                ),
-                color: None,
-                background_color: None,
-                display_name: "i_out [15:0]",
+                display_name: "v_harm_instant [15:0]",
                 display_name_type: Unique,
                 manual_name: None,
                 format: Some("Signed"),
                 field_formats: [],
-                height_scaling_factor: Some(4.0),
+                height_scaling_factor: Some(2.0),
+                analog: Some((
+                    settings: (
+                        render_style: Step,
+                        y_axis_scale: Viewport,
+                    ),
+                )),
+            )),
+            (71): Variable((
+                variable_ref: (
+                    path: (
+                        strs: [
+                            "tb_system_top",
+                        ],
+                        id: Wellen((2)),
+                    ),
+                    name: "current_phase",
+                    id: Wellen((35)),
+                    index: None,
+                ),
+                color: None,
+                background_color: None,
+                display_name: "current_phase [7:0]",
+                display_name_type: Unique,
+                manual_name: None,
+                format: Some("Unsigned"),
+                field_formats: [],
+                height_scaling_factor: None,
                 analog: Some((
                     settings: (
                         render_style: Step,
@@ -847,7 +763,7 @@
                     ),
                 )),
             )),
-            (77): Variable((
+            (93): Variable((
                 variable_ref: (
                     path: (
                         strs: [
@@ -855,19 +771,24 @@
                         ],
                         id: Wellen((2)),
                     ),
-                    name: "pll_locked",
-                    id: Wellen((14)),
+                    name: "thd_val",
+                    id: Wellen((10)),
                     index: None,
                 ),
                 color: None,
                 background_color: None,
-                display_name: "pll_locked",
+                display_name: "thd_val [3:-12]",
                 display_name_type: Unique,
                 manual_name: None,
-                format: None,
+                format: Some("Unsigned fixed point"),
                 field_formats: [],
-                height_scaling_factor: None,
-                analog: None,
+                height_scaling_factor: Some(2.0),
+                analog: Some((
+                    settings: (
+                        render_style: Step,
+                        y_axis_scale: Viewport,
+                    ),
+                )),
             )),
             (86): Variable((
                 variable_ref: (
@@ -896,12 +817,56 @@
                     ),
                 )),
             )),
+            (98): Variable((
+                variable_ref: (
+                    path: (
+                        strs: [
+                            "tb_system_top",
+                        ],
+                        id: Wellen((2)),
+                    ),
+                    name: "thd_12c",
+                    id: Wellen((11)),
+                    index: None,
+                ),
+                color: None,
+                background_color: None,
+                display_name: "thd_12c [3:-12]",
+                display_name_type: Unique,
+                manual_name: None,
+                format: Some("Unsigned fixed point"),
+                field_formats: [],
+                height_scaling_factor: None,
+                analog: None,
+            )),
+            (69): Variable((
+                variable_ref: (
+                    path: (
+                        strs: [
+                            "tb_system_top",
+                        ],
+                        id: Wellen((2)),
+                    ),
+                    name: "center_freq",
+                    id: Wellen((33)),
+                    index: None,
+                ),
+                color: None,
+                background_color: None,
+                display_name: "center_freq [23:0]",
+                display_name_type: Unique,
+                manual_name: None,
+                format: Some("Unsigned fixed point"),
+                field_formats: [],
+                height_scaling_factor: None,
+                analog: None,
+            )),
         },
         display_item_ref_counter: 101,
         viewports: [
             (
-                curr_left: (0.07037732158382937),
-                curr_right: (1.2166004061871258),
+                curr_left: (0.7234276228794031),
+                curr_right: (1.068663611557836),
                 target_left: (-0.2),
                 target_right: (1.2),
                 move_start_left: (-0.2),
@@ -911,14 +876,14 @@
             ),
         ],
         cursor: Some((1, [
-            1188866496,
-            424,
+            3520894144,
+            486,
         ])),
         markers: {},
-        focused_item: Some((15)),
+        focused_item: Some((22)),
         focused_transaction: (None, None),
         default_variable_name_type: Unique,
-        scroll_offset: 0.0,
+        scroll_offset: 21.0,
         display_variable_indices: true,
         graphics: {},
     )),

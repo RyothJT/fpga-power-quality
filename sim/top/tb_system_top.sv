@@ -5,8 +5,8 @@ module tb_system_top;
   // -------------------------------------------------------------------------
   // Timing & Frequency Parameters
   // -------------------------------------------------------------------------
-  localparam real SYSTEM_FREQ_HZ = 100_000_000.0;  // System clock frequency (1 MHz)
-  localparam real CENTER_FREQ_HZ = 60000.0;  // Grid nominal frequency (60 Hz)
+  localparam real SYSTEM_FREQ_HZ = 100_000.0;  // System clock frequency (1 MHz)
+  localparam real CENTER_FREQ_HZ = 60.0;  // Grid nominal frequency (60 Hz)
   localparam int BAUD_RATE = 9600; // for UART
 
   // Derived Clock Half-Period in nanoseconds

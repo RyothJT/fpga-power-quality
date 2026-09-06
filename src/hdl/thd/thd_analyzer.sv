@@ -12,8 +12,8 @@
  */
 module thd_analyzer #(
     parameter real CLOCK_FREQ_HZ = 100_000_000.0,
-    parameter real SAMPLE_RATE_HZ = 1_000_000.0,  // 1 MSPS
-    parameter real CUTOFF_FREQ_HZ = 10.0,  // ~2Hz to suppress 120Hz ripple
+    parameter real SAMPLE_RATE_HZ = 20_000.0,  // 1 MSPS
+    parameter real CUTOFF_FREQ_HZ = 2.0,  // ~2Hz to suppress 120Hz ripple
     parameter real GRID_PEAK_NOMINAL_Q15 = 16383.0,  // Nominal peak amplitude in Q1.15 (16'h3FFF)
     parameter real GRID_FREQ_HZ = 60.0  // Nominal grid frequency
 ) (
@@ -268,20 +268,19 @@ module thd_analyzer #(
             window_sample_cnt <= window_sample_cnt + 1'b1;
           end
         end
-
-        // --- Multi-Cycle Shift-Subtract Divider Engine ---
-        if (div_busy) begin
-          if (div_bit_cnt > 0) begin
-            div_bit_cnt <= div_bit_cnt - 1'b1;
-            if (div_num >= ({16'd0, div_den} << (div_bit_cnt - 1))) begin
-              div_num      <= div_num - ({16'd0, div_den} << (div_bit_cnt - 1));
-              div_quotient <= div_quotient | (16'b1 << (div_bit_cnt - 1));
-            end
-          end else begin
-            div_busy      <= 1'b0;
-            thd_12c       <= div_quotient;  // Output in correct Q4.12 format
-            update_strobe <= 1'b1;
+      end
+      // --- Multi-Cycle Shift-Subtract Divider Engine ---
+      if (div_busy) begin
+        if (div_bit_cnt > 0) begin
+          div_bit_cnt <= div_bit_cnt - 1'b1;
+          if (div_num >= ({16'd0, div_den} << (div_bit_cnt - 1))) begin
+            div_num      <= div_num - ({16'd0, div_den} << (div_bit_cnt - 1));
+            div_quotient <= div_quotient | (16'b1 << (div_bit_cnt - 1));
           end
+        end else begin
+          div_busy      <= 1'b0;
+          thd_12c       <= div_quotient;  // Output in correct Q4.12 format
+          update_strobe <= 1'b1;
         end
       end
     end

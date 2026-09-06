@@ -3,7 +3,7 @@
 module dds_top #(
     parameter PHASE_ACC_WIDTH = 32,
     parameter real CLOCK_FREQ_HZ = 100_000_000.0,
-    parameter real TARGET_SAMPLE_RATE_HZ = 1_000_000.0
+    parameter real SAMPLE_RATE_HZ = 20_000.0
 ) (
     input  wire         clk,
     input  wire         rst,
@@ -29,8 +29,8 @@ module dds_top #(
   // -------------------------------------------------------------------------
   // 1. Clock Divider & Base Frequency (Strict DSP Pipeline)
   // -------------------------------------------------------------------------
-  localparam integer DIV_LIMIT = (CLOCK_FREQ_HZ / TARGET_SAMPLE_RATE_HZ < 1) ? 1 : $rtoi(
-      CLOCK_FREQ_HZ / TARGET_SAMPLE_RATE_HZ
+  localparam integer DIV_LIMIT = (CLOCK_FREQ_HZ / SAMPLE_RATE_HZ < 1) ? 1 : $rtoi(
+      CLOCK_FREQ_HZ / SAMPLE_RATE_HZ
   );
   localparam real ACTUAL_SAMPLE_RATE_HZ = CLOCK_FREQ_HZ / DIV_LIMIT;
   localparam logic [31:0] FREQ_MULT = 32'($rtoi((16777216.0 / ACTUAL_SAMPLE_RATE_HZ) * 65536.0));

@@ -8,6 +8,7 @@
  */
 module system_top #(
     parameter real CLOCK_FREQ_HZ = 100_000_000.0,
+    parameter real SAMPLE_RATE_HZ = 20_000.0,
     parameter real CENTER_FREQ_HZ = 60.0,
     parameter BAUD_RATE = 115200
 ) (
@@ -84,7 +85,7 @@ module system_top #(
       .clk          (clk),
       .rst          (~rst_n),
       .update_strobe(uart_update_strobe),
-      .force_strobe (1'b0),        // Your debug heartbeat counter
+      .force_strobe (1'b0),                // Your debug heartbeat counter
       .v_rms        (v_rms),
       .i_rms        (i_rms),
       .p_avg        (p_avg),
@@ -101,7 +102,8 @@ module system_top #(
   // 1. Direct Digital Synthesizer (DDS) Core
   // -------------------------------------------------------------------------
   dds_top #(
-      .CLOCK_FREQ_HZ(CLOCK_FREQ_HZ)
+      .CLOCK_FREQ_HZ (CLOCK_FREQ_HZ),
+      .SAMPLE_RATE_HZ(SAMPLE_RATE_HZ)
   ) u_dds (
       .clk          (clk),
       .rst          (dds_rst),
@@ -175,7 +177,8 @@ module system_top #(
   // 4. THD
   // -------------------------------------------------------------------------
   thd_analyzer #(
-      .CLOCK_FREQ_HZ(CLOCK_FREQ_HZ)
+      .CLOCK_FREQ_HZ (CLOCK_FREQ_HZ),
+      .SAMPLE_RATE_HZ(SAMPLE_RATE_HZ)
   ) u_thd (
       .clk          (clk),
       .rst_n        (rst_n),
